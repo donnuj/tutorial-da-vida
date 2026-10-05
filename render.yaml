@@ -2,33 +2,31 @@ services:
   - type: web
     name: tutorial-da-vida-api
     runtime: node
+    region: oregon
+    plan: free
     rootDir: backend
-    buildCommand: npm ci --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build
-    startCommand: node dist/main.js
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && npm run start:prod
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 3000
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL
         sync: false
       - key: JWT_SECRET
-        sync: false
+        generateValue: true
       - key: JWT_EXPIRES_IN
         value: 1h
       - key: JWT_REFRESH_EXPIRES_IN
-        value: 30d
+        value: 7d
       - key: JWT_ISSUER
         value: tutorial-da-vida-api
       - key: JWT_AUDIENCE
         value: tutorial-da-vida-web
       - key: CORS_ORIGINS
-        value: https://tutorialdavida.pages.dev
-      - key: ADMIN_EMAILS
-        sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: EMAIL_FROM
-        value: noreply@tutorialdavida.app
+        value: https://tutorial-da-vida.pages.dev
       - key: FRONTEND_URL
-        value: https://tutorialdavida.pages.dev
+        value: https://tutorial-da-vida.pages.dev
