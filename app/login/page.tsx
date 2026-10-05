@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+import { auth, ApiError } from '@/src/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,29 +19,20 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const endpoint = mode === 'login' ? '/auth/login' : '/auth/register';
-      const body = mode === 'login'
-        ? { email, password }
-        : { email, username, password };
+      const data = mode === 'login'
+        ? await auth.login(email, password)
+        : await auth.register(email, username, password);
 
-      const res = await fetch(API + endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message ?? 'Erro desconhecido');
-      }
-
-      const data = await res.json();
       localStorage.setItem('tdv_access_token', data.accessToken);
       localStorage.setItem('tdv_profile', JSON.stringify(data.profile));
-      router.replace('/game');
+
+      if (data.profile.hasCharacter) {
+        router.replace('/game');
+      } else {
+        router.replace('/create-character');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao fazer login');
+      setError(err instanceof ApiError ? err.message : 'Erro desconhecido');
     } finally {
       setLoading(false);
     }
@@ -51,95 +41,67 @@ export default function LoginPage() {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      height: '100vh', background: '#1a1a2e', fontFamily: 'monospace',
+      height: '100vh', background: '#0d0d1a', fontFamily: 'monospace',
+      backgroundImage: 'radial-gradient(ellipse at 50% 120%, #1a1a3a 0%, #0d0d1a 70%)',
     }}>
       <div style={{
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,215,0,0.3)',
-        borderRadius: 12, padding: '40px 48px',
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,215,0,0.2)',
+        borderRadius: 16, padding: '40px 48px',
         width: 360, color: '#fff',
+        boxShadow: '0 0 80px rgba(255,215,0,0.05)',
       }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>🌍</div>
-          <h1 style={{ fontSize: 20, color: '#FFD700', fontWeight: 'bold' }}>
+          <div style={{ fontSize: 40, marginBottom: 10, filter: 'drop-shadow(0 0 20px rgba(255,215,0,0.4))' }}>🌍</div>
+          <h1 style={{ fontSize: 22, color: '#FFD700', fontWeight: 'bold', letterSpacing: 1, marginBottom: 6 }}>
             Tutorial da Vida
           </h1>
-          <p style={{ fontSize: 11, color: '#888', marginTop: 6 }}>
+          <p style={{ fontSize: 12, color: '#555', fontStyle: 'italic' }}>
             Você nasceu. Agora aprenda a viver.
           </p>
         </div>
 
-        {/* Mode toggle */}
-        <div style={{ display: 'flex', marginBottom: 24, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <div style={{ display: 'flex', marginBottom: 24, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
           {(['login', 'register'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              style={{
-                flex: 1, padding: '8px 0', fontSize: 12,
-                background: mode === m ? 'rgba(255,215,0,0.15)' : 'transparent',
-                border: 'none',
-                color: mode === m ? '#FFD700' : '#666',
-                fontFamily: 'monospace',
-                borderBottom: mode === m ? '2px solid #FFD700' : '2px solid transparent',
-              }}
-            >
+            <button key={m} onClick={() => setMode(m)} style={{
+              flex: 1, padding: '9px 0', fontSize: 12,
+              background: mode === m ? 'rgba(255,215,0,0.1)' : 'transparent',
+              border: 'none', color: mode === m ? '#FFD700' : '#444',
+              fontFamily: 'monospace',
+              borderBottom: mode === m ? '2px solid #FFD700' : '2px solid transparent',
+              transition: 'all 0.2s',
+            }}>
               {m === 'login' ? 'Entrar' : 'Criar Conta'}
             </button>
           ))}
         </div>
 
-        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={inputStyle}
-          />
+        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <input type="email" placeholder="Email" value={email}
+            onChange={(e) => setEmail(e.target.value)} required style={inputStyle} />
 
           {mode === 'register' && (
-            <input
-              type="text"
-              placeholder="Nome de usuário (3-32 caracteres)"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              style={inputStyle}
-            />
+            <input type="text" placeholder="Nome de usuário" value={username}
+              onChange={(e) => setUsername(e.target.value)} required style={inputStyle} />
           )}
 
-          <input
-            type="password"
-            placeholder="Senha"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            style={inputStyle}
-          />
+          <input type="password" placeholder="Senha" value={password}
+            onChange={(e) => setPassword(e.target.value)} required style={inputStyle} />
 
           {error && (
-            <div style={{ color: '#FF6B6B', fontSize: 11, textAlign: 'center' }}>
+            <div style={{ color: '#FF6B6B', fontSize: 11, textAlign: 'center', padding: '4px 0' }}>
               {error}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              marginTop: 8,
-              padding: '12px 0',
-              background: loading ? 'rgba(255,215,0,0.1)' : 'rgba(255,215,0,0.2)',
-              border: '1px solid rgba(255,215,0,0.5)',
-              borderRadius: 8,
-              color: '#FFD700',
-              fontSize: 13,
-              fontFamily: 'monospace',
-              fontWeight: 'bold',
-            }}
-          >
+          <button type="submit" disabled={loading} style={{
+            marginTop: 6, padding: '13px 0',
+            background: loading ? 'rgba(255,215,0,0.05)' : 'rgba(255,215,0,0.12)',
+            border: '1px solid rgba(255,215,0,0.4)',
+            borderRadius: 8, color: '#FFD700',
+            fontSize: 13, fontFamily: 'monospace', fontWeight: 'bold',
+            letterSpacing: 0.5, transition: 'all 0.2s',
+          }}>
             {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar Conta'}
           </button>
         </form>
@@ -149,13 +111,10 @@ export default function LoginPage() {
 }
 
 const inputStyle: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.05)',
-  border: '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 6,
-  padding: '10px 12px',
-  color: '#fff',
-  fontSize: 13,
-  fontFamily: 'monospace',
-  outline: 'none',
-  width: '100%',
+  background: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: 6, padding: '11px 14px',
+  color: '#fff', fontSize: 13, fontFamily: 'monospace',
+  outline: 'none', width: '100%',
+  transition: 'border-color 0.2s',
 };
