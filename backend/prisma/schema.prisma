@@ -1,0 +1,146 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Account {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  username     String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  lastLogin    DateTime  @default(now())
+  status       String    @default("active")
+  isBanned     Boolean   @default(false)
+  banReason    String?
+
+  characters    Character[]
+  refreshTokens RefreshToken[]
+  resetTokens   PasswordResetToken[]
+}
+
+model Character {
+  id         Int      @id @default(autoincrement())
+  accountId  Int
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name       String
+  generation Int      @default(1)
+  alive      Boolean  @default(true)
+
+  // Game time (in game minutes since birth)
+  gameAge      Int     @default(0)
+  gameTimestamp DateTime @default(now())
+
+  // Phase of life
+  phase       String  @default("childhood") // childhood | adolescence | adult
+
+  // Core attributes (0-100)
+  intelligence   Float @default(50)
+  education      Float @default(0)
+  discipline     Float @default(50)
+  health         Float @default(100)
+  energy         Float @default(100)
+  happiness      Float @default(70)
+  stress         Float @default(10)
+  sociability    Float @default(50)
+  communication  Float @default(50)
+  reputation     Float @default(0)
+  creativity     Float @default(50)
+  resilience     Float @default(50)
+  financialKnowledge Float @default(0)
+  influence      Float @default(0)
+
+  // Economy
+  money          Decimal  @default(0)    @db.Decimal(12, 2)
+  monthlyIncome  Decimal  @default(0)    @db.Decimal(12, 2)
+  monthlyExpenses Decimal @default(500)  @db.Decimal(12, 2)
+
+  // Current world state
+  locationId      String   @default("home")
+  currentActivity String?
+  activityEndsAt  DateTime?
+  activityData    String?  // JSON with activity-specific data
+
+  // Career
+  jobId           String?
+  jobTitle        String?
+  jobExperience   Float    @default(0)
+  studyProgress   Float    @default(0)
+  studyTarget     String?  // "highschool" | "college" | "course"
+
+  // Social
+  politicalLeaning String? // "left" | "right" | "center" | "independent" | "apolitical"
+
+  // Property
+  propertyIds     String?  // JSON array of owned location IDs
+
+  // Legacy from previous character
+  inheritedMoney  Decimal  @default(0) @db.Decimal(12, 2)
+  inheritedReputation Float @default(0)
+  parentCharacterId Int?
+
+  saveData   CharacterSave?
+  saveAudits CharacterSaveAudit[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+model CharacterSave {
+  id            Int       @id @default(autoincrement())
+  characterId   Int       @unique
+  character     Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  schemaVersion Int       @default(1)
+  revision      Int       @default(1)
+  checksum      String
+  data          String    // Full serialized game state
+  lastOnline    DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model CharacterSaveAudit {
+  id          Int       @id @default(autoincrement())
+  characterId Int
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  revision    Int
+  checksum    String
+  createdAt   DateTime  @default(now())
+
+  @@unique([characterId, revision])
+  @@index([characterId])
+}
+
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  tokenHash String    @unique
+  familyId  String
+  accountId Int
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([accountId])
+  @@index([familyId])
+}
+
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  tokenHash String    @unique
+  accountId Int
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([accountId])
+}
