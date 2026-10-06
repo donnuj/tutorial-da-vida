@@ -61,6 +61,10 @@ export class WorldScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
+    this.load.spritesheet('player', '/assets/characters/player.png', {
+      frameWidth: 32,
+      frameHeight: 64,
+    });
   }
 
   create() {
@@ -211,9 +215,9 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private createNPCs() {
-    for (const def of NPCS) {
-      this.npcs.push(new NPC(this, def));
-    }
+    NPCS.forEach((def, i) => {
+      this.npcs.push(new NPC(this, def, i));
+    });
   }
 
   private createCamera() {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { simulation, character as characterApi } from '@/src/lib/api';
 import { useGameStore } from '@/src/store/gameStore';
 
@@ -344,7 +344,7 @@ function SceneDeparture() {
   );
 }
 
-const SCENE_MAP: Record<SceneType, () => JSX.Element> = {
+const SCENE_MAP: Record<SceneType, () => React.ReactElement> = {
   hospital:  SceneHospital,
   nursery:   SceneNursery,
   street:    SceneStreet,
