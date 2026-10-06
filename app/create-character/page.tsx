@@ -57,6 +57,10 @@ export default function CreateCharacterPage() {
 
       setTimeout(() => router.replace('/game'), 3000);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        router.replace('/game');
+        return;
+      }
       setError(err instanceof ApiError ? err.message : 'Erro ao criar personagem');
       setPhase('name');
       setLoading(false);
