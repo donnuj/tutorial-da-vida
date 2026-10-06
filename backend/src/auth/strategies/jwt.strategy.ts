@@ -39,6 +39,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: { id: payload.sub },
     });
     if (!account || account.isBanned) throw new UnauthorizedException();
-    return { accountId: account.id, email: account.email };
+    return { sub: account.id, email: account.email };
   }
 }
