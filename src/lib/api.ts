@@ -104,6 +104,11 @@ export const character = {
 export const simulation = {
   offlineProgress: () =>
     request<OfflineProgressResult>('/simulation/offline-progress', { method: 'POST' }),
+  advanceToAdult: (traitDeltas: Record<string, number>) =>
+    request<void>('/simulation/advance-to-adult', {
+      method: 'POST',
+      body: JSON.stringify({ traitDeltas }),
+    }),
 };
 
 // Types matching backend responses

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface OfflineResult {
@@ -105,6 +105,34 @@ export class SimulationService {
       energyChange: -Math.min(50, gameDays * 5),
       events,
     };
+  }
+
+  async advanceToAdult(accountId: number, traitDeltas: Record<string, number> = {}) {
+    const character = await this.prisma.character.findFirst({
+      where: { accountId, alive: true },
+    });
+    if (!character) throw new NotFoundException('Personagem não encontrado.');
+    if (character.phase === 'adult') throw new BadRequestException('Personagem já é adulto.');
+
+    const clamp = (v: number) => Math.max(0, Math.min(100, v));
+    const adultGameAge = 18 * 365 * 24 * 60;
+
+    await this.prisma.character.update({
+      where: { id: character.id },
+      data: {
+        phase: 'adult',
+        gameAge: adultGameAge,
+        gameTimestamp: new Date(),
+        intelligence:       clamp(Number(character.intelligence)       + (traitDeltas.intelligence       ?? 0)),
+        education:          clamp(Number(character.education)          + (traitDeltas.education          ?? 0)),
+        discipline:         clamp(Number(character.discipline)         + (traitDeltas.discipline         ?? 0)),
+        happiness:          clamp(Number(character.happiness)          + (traitDeltas.happiness          ?? 0)),
+        creativity:         clamp(Number(character.creativity)         + (traitDeltas.creativity         ?? 0)),
+        financialKnowledge: clamp(Number(character.financialKnowledge) + (traitDeltas.financialKnowledge ?? 0)),
+        reputation:         clamp(Number(character.reputation)         + (traitDeltas.reputation         ?? 0)),
+        ...(traitDeltas.money ? { money: { increment: traitDeltas.money } } : {}),
+      },
+    });
   }
 
   private emptyResult(): OfflineResult {

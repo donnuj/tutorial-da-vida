@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { GameHUD } from '@/src/components/GameHUD';
+import { LifeNarrative } from '@/src/components/LifeNarrative';
 import { useGameStore } from '@/src/store/gameStore';
 import { character as characterApi, simulation, ApiError, type OfflineProgressResult } from '@/src/lib/api';
 
@@ -18,6 +19,7 @@ export default function GamePage() {
   const setAccessToken = useGameStore((s) => s.setAccessToken);
   const setLoaded = useGameStore((s) => s.setLoaded);
   const isLoaded = useGameStore((s) => s.isLoaded);
+  const character = useGameStore((s) => s.character);
 
   const [offline, setOffline] = useState<OfflineProgressResult | null>(null);
   const [error, setError] = useState('');
@@ -31,14 +33,13 @@ export default function GamePage() {
 
   async function loadGame() {
     try {
-      // Calc offline progress first (updates character state server-side)
-      const offlineResult = await simulation.offlineProgress();
-      if (offlineResult.timeElapsedMinutes > 60) {
-        setOffline(offlineResult);
+      const state = await characterApi.getState();
+
+      if (state.phase === 'adult') {
+        const offlineResult = await simulation.offlineProgress();
+        if (offlineResult.timeElapsedMinutes > 60) setOffline(offlineResult);
       }
 
-      // Then load current state
-      const state = await characterApi.getState();
       setCharacter({
         id: state.id,
         name: state.name,
@@ -58,7 +59,6 @@ export default function GamePage() {
       setLoaded(true);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        // No character yet
         router.replace('/create-character');
         return;
       }
@@ -91,6 +91,10 @@ export default function GamePage() {
   }
 
   if (!isLoaded) return <GameLoading />;
+
+  if (character && character.phase !== 'adult') {
+    return <LifeNarrative />;
+  }
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
