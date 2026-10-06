@@ -11,11 +11,13 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [issues, setIssues] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setIssues([]);
     setLoading(true);
 
     try {
@@ -32,7 +34,12 @@ export default function LoginPage() {
         router.replace('/create-character');
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro desconhecido');
+      if (err instanceof ApiError) {
+        setError(err.message);
+        if (err.issues.length > 0) setIssues(err.issues.map(i => i.message));
+      } else {
+        setError('Erro desconhecido');
+      }
     } finally {
       setLoading(false);
     }
@@ -91,6 +98,11 @@ export default function LoginPage() {
           {error && (
             <div style={{ color: '#FF6B6B', fontSize: 11, textAlign: 'center', padding: '4px 0' }}>
               {error}
+              {issues.length > 0 && (
+                <ul style={{ margin: '6px 0 0', padding: '0 0 0 14px', textAlign: 'left', lineHeight: 1.6 }}>
+                  {issues.map((msg, i) => <li key={i}>{msg}</li>)}
+                </ul>
+              )}
             </div>
           )}
 

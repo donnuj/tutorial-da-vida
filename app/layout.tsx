@@ -4,6 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Tutorial da Vida',
   description: 'RPG/simulador de vida idle 2D. Você nasceu. Agora aprenda a viver.',
+  icons: { icon: '/favicon.svg' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -59,11 +59,20 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 export class ApiError extends Error {
+  public readonly issues: { path: string; message: string }[];
+
   constructor(
     public readonly status: number,
     public readonly body: Record<string, unknown>,
   ) {
-    super(String(body?.message ?? `HTTP ${status}`));
+    const raw = body?.message;
+    const msg = typeof raw === 'string'
+      ? raw
+      : (raw as Record<string, unknown>)?.message ?? `HTTP ${status}`;
+    super(String(msg));
+
+    const rawIssues = (raw as Record<string, unknown>)?.issues;
+    this.issues = Array.isArray(rawIssues) ? rawIssues as { path: string; message: string }[] : [];
   }
 }
 
