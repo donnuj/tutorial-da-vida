@@ -1,23 +1,22 @@
 import Phaser from 'phaser';
 import { TILE_SIZE, type NpcDef } from '../world/NeighborhoodMap';
 
-// Uses the same hero.png as the player, differentiated by tint
-const NPC_SCALE = 0.65;
+// player.png: 512x64, 32x64 per frame, civilian side-view
+// Different frame offsets per NPC to give visual variety within the same sheet
+const NPC_SCALE = 0.7;
 
+// Tints that work well on the beige/brown civilian sprite
 const NPC_TINTS = [
-  0xffffff, // neutral — same as player
-  0xff9999, // reddish
-  0x99ff99, // greenish
-  0x9999ff, // bluish
-  0xffcc77, // orange
+  0xffc8a0, // skin warm
+  0xa0d0ff, // blue shirt
+  0xffd080, // yellow shirt
+  0xc0ffa0, // green shirt
+  0xffb0b0, // red/pink
 ];
 
-const ANIM = {
-  walk_down:  { start: 0,  end: 4  },
-  walk_left:  { start: 5,  end: 9  },
-  walk_up:    { start: 10, end: 14 },
-  walk_right: { start: 15, end: 19 },
-};
+// Walk cycle: frames 0-7 (left-facing). Flip for right.
+const WALK_FRAMES = { start: 0, end: 7 };
+const IDLE_FRAME  = 0;
 
 export class NPC {
   readonly id: string;
@@ -48,11 +47,11 @@ export class NPC {
     const wx = this.tileX * TILE_SIZE + TILE_SIZE / 2;
     const wy = this.tileY * TILE_SIZE + TILE_SIZE / 2;
 
-    this.body = scene.add.sprite(0, -20, 'player', 2);
+    this.body = scene.add.sprite(0, -16, 'player', IDLE_FRAME);
     this.body.setScale(NPC_SCALE);
     this.body.setTint(NPC_TINTS[npcIndex % NPC_TINTS.length]);
 
-    this.nameLabel = scene.add.text(0, -52, def.name, {
+    this.nameLabel = scene.add.text(0, -48, def.name, {
       fontSize: '8px', fontFamily: 'monospace',
       color: '#e8d5b0', stroke: '#000000', strokeThickness: 3, align: 'center',
     }).setOrigin(0.5, 1);
@@ -77,30 +76,25 @@ export class NPC {
   }
 
   private ensureAnimations(scene: Phaser.Scene) {
-    if (scene.anims.exists('player_walk_down')) return;
+    if (scene.anims.exists('player_walk')) return;
 
-    for (const [key, frames] of Object.entries(ANIM)) {
-      scene.anims.create({
-        key: `player_${key}`,
-        frames: scene.anims.generateFrameNumbers('player', frames),
-        frameRate: 8,
-        repeat: -1,
-      });
-    }
+    scene.anims.create({
+      key: 'player_walk',
+      frames: scene.anims.generateFrameNumbers('player', WALK_FRAMES),
+      frameRate: 8,
+      repeat: -1,
+    });
     scene.anims.create({
       key: 'player_idle',
-      frames: [{ key: 'player', frame: 2 }],
+      frames: [{ key: 'player', frame: IDLE_FRAME }],
       frameRate: 1,
     });
   }
 
   private playWalk(toX: number, toY: number, prevX: number, prevY: number) {
     const dx = toX - prevX;
-    const dy = toY - prevY;
-    if      (dx < 0) this.body.play('player_walk_left',  true);
-    else if (dx > 0) this.body.play('player_walk_right', true);
-    else if (dy < 0) this.body.play('player_walk_up',    true);
-    else             this.body.play('player_walk_down',  true);
+    this.body.setFlipX(dx > 0);
+    this.body.play('player_walk', true);
   }
 
   private scheduleNextMove() {
@@ -128,6 +122,7 @@ export class NPC {
       const step = path.shift();
       if (!step) {
         this.isMoving = false;
+        this.body.setFlipX(false);
         this.body.play('player_idle', true);
         this.scheduleNextMove();
         return;

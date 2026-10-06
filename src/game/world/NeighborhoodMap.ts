@@ -3,8 +3,8 @@ export const T = {
   GRASS: 0,
   ROAD_H: 1,
   ROAD_V: 2,
-  ROAD_X: 3,   // intersection
-  ROAD_TL: 4,  // corner top-left
+  ROAD_X: 3,
+  ROAD_TL: 4,
   ROAD_TR: 5,
   ROAD_BL: 6,
   ROAD_BR: 7,
@@ -28,9 +28,18 @@ export interface BuildingDef {
   heightTiles: number;
   color: number;
   roofColor: number;
+  /** column offset of door within building (default: center) */
   doorX?: number;
   interactionRadius: number;
   actions: string[];
+  /** if set, pressing E at the door enters this interior */
+  interiorId?: string;
+}
+
+/** World tile position of a building's door */
+export function buildingDoorTile(b: BuildingDef): { x: number; y: number } {
+  const col = b.doorX ?? Math.floor(b.widthTiles / 2);
+  return { x: b.tileX + col, y: b.tileY + b.heightTiles - 1 };
 }
 
 export interface NpcDef {
@@ -54,172 +63,178 @@ export const TILE_SIZE = 32;
 export const MAP_WIDTH = 60;
 export const MAP_HEIGHT = 50;
 
-// The full tile map grid (60 x 50)
-// Using a compact representation — 0=grass, 1=road_h, 2=road_v, etc.
 export function buildMap(): number[][] {
-  const g = T.GRASS;
+  const g  = T.GRASS;
   const rh = T.ROAD_H;
   const rv = T.ROAD_V;
   const rx = T.ROAD_X;
   const sw = T.SIDEWALK;
   const tr = T.TREE;
   const pk = T.PARK_GRASS;
-  const di = T.DIRT;
 
-  // Initialize with grass
   const map: number[][] = Array.from({ length: MAP_HEIGHT }, () =>
     Array(MAP_WIDTH).fill(g)
   );
 
-  // === MAIN ROADS ===
-  // Horizontal main road at y=20 (3 tiles wide: 19, 20, 21)
+  // ── MAIN HORIZONTAL ROAD at y=20 (sidewalk / road / sidewalk) ──
   for (let x = 0; x < MAP_WIDTH; x++) {
     map[19][x] = sw;
     map[20][x] = rh;
     map[21][x] = sw;
   }
 
-  // Horizontal secondary road at y=8 (1 tile)
+  // ── SECONDARY HORIZONTAL ROAD at y=8 — now with proper sidewalks ──
   for (let x = 0; x < MAP_WIDTH; x++) {
-    map[8][x] = rh;
+    map[7][x]  = sw;
+    map[8][x]  = rh;
+    map[9][x]  = sw;
   }
 
-  // Horizontal secondary road at y=36
+  // ── SECONDARY HORIZONTAL ROAD at y=36 — with sidewalks ──
   for (let x = 0; x < MAP_WIDTH; x++) {
+    map[35][x] = sw;
     map[36][x] = rh;
+    map[37][x] = sw;
   }
 
-  // Vertical main road at x=30 (3 tiles wide: 29, 30, 31)
+  // ── MAIN VERTICAL ROAD at x=30 (sidewalk / road / sidewalk) ──
   for (let y = 0; y < MAP_HEIGHT; y++) {
     map[y][29] = sw;
     map[y][30] = rv;
     map[y][31] = sw;
   }
 
-  // Vertical secondary road at x=12
+  // ── SECONDARY VERTICAL ROAD at x=12 — with sidewalks ──
   for (let y = 0; y < MAP_HEIGHT; y++) {
+    map[y][11] = sw;
     map[y][12] = rv;
+    map[y][13] = sw;
   }
 
-  // Vertical secondary road at x=48
+  // ── SECONDARY VERTICAL ROAD at x=48 — with sidewalks ──
   for (let y = 0; y < MAP_HEIGHT; y++) {
+    map[y][47] = sw;
     map[y][48] = rv;
+    map[y][49] = sw;
   }
 
-  // Fix intersections
+  // Intersections
   for (const [iy, ix] of [
     [20, 30], [20, 12], [20, 48],
-    [8, 30],  [8, 12],  [8, 48],
+    [8,  30], [8,  12], [8,  48],
     [36, 30], [36, 12], [36, 48],
   ]) {
     map[iy][ix] = rx;
   }
 
-  // === PARK (center-left zone, rows 22-34, cols 13-28) ===
-  for (let y = 22; y <= 34; y++) {
-    for (let x = 13; x <= 28; x++) {
+  // ── PARK (center-left, rows 23–34, cols 14–28) ──
+  // Starts at x=14 so sidewalk at x=13 is visible as park border
+  for (let y = 23; y <= 34; y++) {
+    for (let x = 14; x <= 28; x++) {
       map[y][x] = pk;
     }
   }
-  // Trees in park perimeter
-  for (let x = 14; x <= 27; x += 3) {
-    map[22][x] = tr;
+
+  // Park perimeter trees
+  for (let x = 14; x <= 28; x += 3) {
+    map[23][x] = tr;
     map[34][x] = tr;
   }
-  for (let y = 23; y <= 33; y += 3) {
-    map[y][13] = tr;
+  for (let y = 24; y <= 33; y += 3) {
+    map[y][14] = tr;
     map[y][28] = tr;
   }
-  // Central tree cluster
+
+  // Central tree cluster in park
   map[28][20] = tr; map[28][21] = tr;
   map[27][20] = tr; map[27][21] = tr;
 
   return map;
 }
 
+// ── BUILDINGS ────────────────────────────────────────────────────────────────
+// All y positions adjusted to clear sidewalk rows (y=7,9 and y=35,37)
+// x positions clear of x=11,13 and x=47,49 sidewalks
+
 export const BUILDINGS: BuildingDef[] = [
-  // === RESIDENTIAL ZONE (top-left, rows 1-18, cols 1-11) ===
+
+  // ── RESIDENTIAL ZONE (top-left, rows 1–6, cols 1–10) ──
   {
     id: 'player_home',
     label: 'Sua Casa',
     tileX: 1, tileY: 1,
-    widthTiles: 5, heightTiles: 6,
-    color: 0xF5E6C8,
-    roofColor: 0xC0392B,
+    widthTiles: 5, heightTiles: 5,
+    color: 0xF5E6C8, roofColor: 0xC0392B,
     interactionRadius: 3,
     actions: ['sleep', 'idle'],
+    interiorId: 'player_home_interior',
   },
   {
     id: 'neighbor_house_1',
-    label: 'Casa do Vizinho',
+    label: 'Casa Vizinha',
     tileX: 7, tileY: 1,
-    widthTiles: 4, heightTiles: 6,
-    color: 0xD5E8C0,
-    roofColor: 0x2980B9,
+    widthTiles: 4, heightTiles: 5,
+    color: 0xD5E8C0, roofColor: 0x2980B9,
     interactionRadius: 2,
     actions: ['visit'],
   },
+
+  // Second row of houses — clear of y=7 sidewalk (start at y=11, end by y=17)
   {
     id: 'neighbor_house_2',
-    label: 'Casa da Vizinha',
-    tileX: 1, tileY: 9,
-    widthTiles: 4, heightTiles: 6,
-    color: 0xE8D5E8,
-    roofColor: 0x8E44AD,
+    label: 'Casa da Rua',
+    tileX: 1, tileY: 11,
+    widthTiles: 4, heightTiles: 5,
+    color: 0xE8D5E8, roofColor: 0x8E44AD,
     interactionRadius: 2,
     actions: ['visit'],
   },
   {
     id: 'neighbor_house_3',
     label: 'Casa da Família',
-    tileX: 7, tileY: 9,
-    widthTiles: 4, heightTiles: 6,
-    color: 0xE8E8D5,
-    roofColor: 0x16A085,
+    tileX: 6, tileY: 11,
+    widthTiles: 4, heightTiles: 5,
+    color: 0xE8E8D5, roofColor: 0x16A085,
     interactionRadius: 2,
     actions: ['visit'],
   },
 
-  // === COMMERCIAL ZONE (top-right, rows 1-18, cols 32-47) ===
+  // ── COMMERCIAL ZONE (top-right, rows 1–17, cols 32–46) ──
   {
     id: 'market',
     label: 'Mercado',
     tileX: 32, tileY: 1,
-    widthTiles: 7, heightTiles: 7,
-    color: 0xFFF3CD,
-    roofColor: 0xE67E22,
+    widthTiles: 7, heightTiles: 6,
+    color: 0xFFF3CD, roofColor: 0xE67E22,
     interactionRadius: 3,
     actions: ['shop'],
   },
   {
     id: 'restaurant',
     label: 'Restaurante',
-    tileX: 32, tileY: 10,
-    widthTiles: 6, heightTiles: 7,
-    color: 0xFFE0E0,
-    roofColor: 0xE74C3C,
+    tileX: 40, tileY: 1,
+    widthTiles: 6, heightTiles: 6,
+    color: 0xFFE0E0, roofColor: 0xE74C3C,
     interactionRadius: 3,
     actions: ['shop'],
   },
   {
     id: 'bank',
     label: 'Banco',
-    tileX: 40, tileY: 1,
-    widthTiles: 7, heightTiles: 6,
-    color: 0xD5E8FF,
-    roofColor: 0x2C3E50,
+    tileX: 32, tileY: 11,
+    widthTiles: 7, heightTiles: 5,
+    color: 0xD5E8FF, roofColor: 0x2C3E50,
     interactionRadius: 3,
     actions: ['visit'],
   },
 
-  // === EDUCATIONAL ZONE (bottom-left, rows 22-35, cols 1-11) ===
+  // ── EDUCATIONAL ZONE (below main road, rows 23–34, cols 1–10) ──
   {
     id: 'school',
     label: 'Escola',
-    tileX: 1, tileY: 22,
-    widthTiles: 10, heightTiles: 8,
-    color: 0xE8F5E9,
-    roofColor: 0x27AE60,
+    tileX: 1, tileY: 23,
+    widthTiles: 9, heightTiles: 7,
+    color: 0xE8F5E9, roofColor: 0x27AE60,
     interactionRadius: 4,
     actions: ['study'],
   },
@@ -227,72 +242,69 @@ export const BUILDINGS: BuildingDef[] = [
     id: 'library',
     label: 'Biblioteca',
     tileX: 1, tileY: 32,
-    widthTiles: 6, heightTiles: 5,
-    color: 0xFCF3CF,
-    roofColor: 0xF39C12,
+    widthTiles: 6, heightTiles: 3,
+    color: 0xFCF3CF, roofColor: 0xF39C12,
     interactionRadius: 3,
     actions: ['study'],
   },
 
-  // === WORK / SERVICES (bottom-right, rows 22-35, cols 32-47) ===
+  // ── WORK / SERVICES (bottom-right, rows 23–34, cols 32–46) ──
   {
     id: 'office',
     label: 'Escritório',
-    tileX: 32, tileY: 22,
+    tileX: 32, tileY: 23,
     widthTiles: 8, heightTiles: 7,
-    color: 0xEBEFF4,
-    roofColor: 0x3498DB,
+    color: 0xEBEFF4, roofColor: 0x3498DB,
     interactionRadius: 3,
     actions: ['work'],
   },
   {
     id: 'hospital',
     label: 'Hospital',
-    tileX: 32, tileY: 31,
-    widthTiles: 7, heightTiles: 6,
-    color: 0xFFFFFF,
-    roofColor: 0xE74C3C,
+    tileX: 32, tileY: 32,
+    widthTiles: 7, heightTiles: 3,
+    color: 0xFFFFFF, roofColor: 0xE74C3C,
     interactionRadius: 3,
     actions: ['visit'],
   },
+
+  // Bus stop near main road
   {
     id: 'bus_stop',
-    label: 'Ponto de Ônibus',
+    label: 'Ponto',
     tileX: 27, tileY: 17,
     widthTiles: 2, heightTiles: 2,
-    color: 0xBDC3C7,
-    roofColor: 0x7F8C8D,
+    color: 0xBDC3C7, roofColor: 0x7F8C8D,
     interactionRadius: 2,
     actions: ['idle'],
   },
 ];
 
+// ── NPCS ─────────────────────────────────────────────────────────────────────
 export const NPCS: NpcDef[] = [
   {
     id: 'ana',
     name: 'Ana',
     role: 'Vizinha',
-    startTileX: 9, startTileY: 5,
-    color: 0xFF69B4,
-    headColor: 0xF4C2A1,
+    startTileX: 9, startTileY: 4,
+    color: 0xFF69B4, headColor: 0xF4C2A1,
     schedule: [
-      { tileX: 9, tileY: 5, waitMs: 3000 },
-      { tileX: 15, tileY: 5, waitMs: 2000 },
-      { tileX: 15, tileY: 15, waitMs: 5000 },
-      { tileX: 9, tileY: 15, waitMs: 2000 },
+      { tileX: 9, tileY: 4,  waitMs: 3000 },
+      { tileX: 14, tileY: 4,  waitMs: 2000 },
+      { tileX: 14, tileY: 17, waitMs: 4000 },
+      { tileX: 9, tileY: 17,  waitMs: 2000 },
     ],
   },
   {
     id: 'carlos',
     name: 'Carlos',
     role: 'Vendedor',
-    startTileX: 34, startTileY: 3,
-    color: 0x4169E1,
-    headColor: 0x8D5524,
+    startTileX: 34, startTileY: 4,
+    color: 0x4169E1, headColor: 0x8D5524,
     schedule: [
-      { tileX: 34, tileY: 3, waitMs: 5000 },
-      { tileX: 37, tileY: 3, waitMs: 3000 },
-      { tileX: 37, tileY: 6, waitMs: 2000 },
+      { tileX: 34, tileY: 4, waitMs: 5000 },
+      { tileX: 38, tileY: 4, waitMs: 3000 },
+      { tileX: 38, tileY: 6, waitMs: 2000 },
       { tileX: 34, tileY: 6, waitMs: 4000 },
     ],
   },
@@ -301,8 +313,7 @@ export const NPCS: NpcDef[] = [
     name: 'Prof. Maria',
     role: 'Professora',
     startTileX: 5, startTileY: 26,
-    color: 0x228B22,
-    headColor: 0xC68642,
+    color: 0x228B22, headColor: 0xC68642,
     schedule: [
       { tileX: 5, tileY: 26, waitMs: 8000 },
       { tileX: 8, tileY: 26, waitMs: 3000 },
@@ -314,28 +325,26 @@ export const NPCS: NpcDef[] = [
     id: 'seu_jose',
     name: 'Seu José',
     role: 'Aposentado',
-    startTileX: 20, startTileY: 28,
-    color: 0x8B4513,
-    headColor: 0xFAD5A5,
+    startTileX: 19, startTileY: 28,
+    color: 0x8B4513, headColor: 0xFAD5A5,
     schedule: [
-      { tileX: 20, tileY: 28, waitMs: 10000 },
+      { tileX: 19, tileY: 28, waitMs: 10000 },
       { tileX: 22, tileY: 28, waitMs: 8000 },
-      { tileX: 22, tileY: 30, waitMs: 10000 },
-      { tileX: 20, tileY: 30, waitMs: 6000 },
+      { tileX: 22, tileY: 31, waitMs: 10000 },
+      { tileX: 19, tileY: 31, waitMs: 6000 },
     ],
   },
   {
     id: 'lucia',
     name: 'Lúcia',
     role: 'Médica',
-    startTileX: 34, startTileY: 34,
-    color: 0xFFFFFF,
-    headColor: 0xF4C2A1,
+    startTileX: 34, startTileY: 33,
+    color: 0xE8E8E8, headColor: 0xF4C2A1,
     schedule: [
+      { tileX: 34, tileY: 33, waitMs: 4000 },
+      { tileX: 37, tileY: 33, waitMs: 3000 },
+      { tileX: 37, tileY: 34, waitMs: 5000 },
       { tileX: 34, tileY: 34, waitMs: 4000 },
-      { tileX: 37, tileY: 34, waitMs: 3000 },
-      { tileX: 37, tileY: 36, waitMs: 5000 },
-      { tileX: 34, tileY: 36, waitMs: 4000 },
     ],
   },
 ];

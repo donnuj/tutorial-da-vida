@@ -36,3 +36,20 @@ backend/generated/
 
 # Test coverage
 coverage/
+
+# Raw asset downloads (extracted packs — keep only processed files)
+public/assets/kenney-indoor/
+public/assets/kenney-rpg/
+public/assets/kenney-roguelike-chars/
+public/assets/puny-chars/
+public/assets/*.zip
+public/assets/chars-4dir-16x16.png
+public/assets/pokemon-esque.png
+public/assets/rpg-chars-32.png
+public/assets/roguelike-chars.zip
+
+# Temp screenshots
+screenshot-*.png
+
+# Claude Code
+.claude/

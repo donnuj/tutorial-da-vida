@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
 import { WorldScene } from '@/src/game/scenes/WorldScene';
+import { InteriorScene } from '@/src/game/scenes/InteriorScene';
 import { createGameConfig } from '@/src/game/config';
 
 export default function GameCanvas() {
@@ -20,7 +21,7 @@ export default function GameCanvas() {
       if (!gameRef.current) {
         // Initialize only when we know the real dimensions
         const config = createGameConfig(container, width, height);
-        config.scene = [WorldScene];
+        config.scene = [WorldScene, InteriorScene];
         gameRef.current = new Phaser.Game(config);
       } else {
         gameRef.current.scale.resize(width, height);

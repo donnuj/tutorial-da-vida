@@ -40,6 +40,41 @@ Todos os assets usados no projeto. Apenas CC0 / domínio público.
 
 ---
 
+## Tiles de Interior
+
+### Kenney Roguelike Indoor Pack
+- **Arquivo no projeto**: `public/assets/tiles/kenney-indoor.png`
+- **Fonte**: https://kenney.nl/assets/roguelike-rpg-pack
+- **Licença**: CC0 1.0 Universal (domínio público)
+- **Tamanho do tile**: 16×16 px, espaçamento de 1 px entre tiles
+- **Grid**: 26 colunas × 18 linhas = 468 frames
+- **Uso**: pisos dos interiores (quarto, sala, cozinha, banheiro)
+- **Frames chave**: 312 = piso de madeira (linha 12), 208 = pedra/banheiro (linha 8)
+
+---
+
+## Móveis (Cena Interior)
+
+### Crimelike Furniture Pack
+- **Arquivos no projeto**: `public/assets/furniture/*.png`
+- **Fonte**: https://opengameart.org/content/crimelike-characters
+- **Autor**: extradave (OpenGameArt)
+- **Licença**: CC0 1.0 Universal
+- **Tamanho**: 32×32 px cada (1 tile de jogo)
+- **Uso**: móveis top-down no interior da casa do jogador
+
+| Arquivo | Móvel | Cômodo |
+|---------|-------|--------|
+| `bed_wooden_s.png` | Cama de madeira | Quarto |
+| `bath_full_e.png` | Banheira | Banheiro |
+| `sofa_down_1.png` | Sofá | Sala |
+| `desk1.png` | Escrivaninha | Escritório |
+| `oven1.png` | Fogão | Cozinha |
+| `counter_wooden_red.png` | Balcão (geladeira placeholder) | Cozinha |
+| `hifi.png` | TV/Home Theater | Sala |
+
+---
+
 ## Pendências / Próximas Aquisições
 
 | Asset | Fonte Sugerida | Licença | Prioridade |

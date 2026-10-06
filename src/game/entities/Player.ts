@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TILE_SIZE } from '../world/NeighborhoodMap';
+import type { CollisionMap } from '../systems/CollisionMap';
 
 export type PlayerAnimation = 'idle' | 'walk_down' | 'walk_up' | 'walk_left' | 'walk_right' | 'work' | 'study' | 'sleep';
 
@@ -10,17 +11,11 @@ interface PlayerConfig {
   name: string;
 }
 
-// hero.png: 240x448, 48x64 per frame, 5 cols x 7 rows
-// Row 0 (0-4): walk down | Row 1 (5-9): walk left
-// Row 2 (10-14): walk up | Row 3 (15-19): walk right
-const ANIM_FRAMES = {
-  walk_down:  { start: 0,  end: 4  },
-  walk_left:  { start: 5,  end: 9  },
-  walk_up:    { start: 10, end: 14 },
-  walk_right: { start: 15, end: 19 },
-};
-
-const PLAYER_SCALE = 0.65;
+// player.png: 512x64, 32x64 per frame, 16 frames — civilian side-view walk cycle
+// Frames 0-7: walking cycle (left-facing). Flip X for right-facing.
+const WALK_FRAMES  = { start: 0, end: 7 };
+const IDLE_FRAME   = 0;
+const PLAYER_SCALE = 0.7;
 
 export class Player {
   readonly sprite: Phaser.GameObjects.Container;
@@ -50,15 +45,15 @@ export class Player {
     const wx = tileX * TILE_SIZE + TILE_SIZE / 2;
     const wy = tileY * TILE_SIZE + TILE_SIZE / 2;
 
-    this.body = scene.add.sprite(0, -20, 'player', 0);
+    this.body = scene.add.sprite(0, -16, 'player', IDLE_FRAME);
     this.body.setScale(PLAYER_SCALE);
 
-    this.nameLabel = scene.add.text(0, -52, name, {
+    this.nameLabel = scene.add.text(0, -48, name, {
       fontSize: '8px', fontFamily: 'monospace',
       color: '#FFD700', stroke: '#000000', strokeThickness: 3, align: 'center',
     }).setOrigin(0.5, 1);
 
-    this.activityIcon = scene.add.text(22, -28, '', { fontSize: '12px' }).setOrigin(0.5);
+    this.activityIcon = scene.add.text(18, -24, '', { fontSize: '12px' }).setOrigin(0.5);
 
     this.sprite = scene.add.container(wx, wy, [this.body, this.nameLabel, this.activityIcon]);
     this.sprite.setDepth(50);
@@ -68,19 +63,17 @@ export class Player {
   }
 
   private registerAnimations() {
-    if (this.scene.anims.exists('player_walk_down')) return;
+    if (this.scene.anims.exists('player_walk')) return;
 
-    for (const [key, frames] of Object.entries(ANIM_FRAMES)) {
-      this.scene.anims.create({
-        key: `player_${key}`,
-        frames: this.scene.anims.generateFrameNumbers('player', frames),
-        frameRate: 8,
-        repeat: -1,
-      });
-    }
+    this.scene.anims.create({
+      key: 'player_walk',
+      frames: this.scene.anims.generateFrameNumbers('player', WALK_FRAMES),
+      frameRate: 8,
+      repeat: -1,
+    });
     this.scene.anims.create({
       key: 'player_idle',
-      frames: [{ key: 'player', frame: 2 }],
+      frames: [{ key: 'player', frame: IDLE_FRAME }],
       frameRate: 1,
     });
   }
@@ -89,6 +82,20 @@ export class Player {
   get worldY() { return this.tileY * TILE_SIZE + TILE_SIZE / 2; }
   get currentTileX() { return this.tileX; }
   get currentTileY() { return this.tileY; }
+
+  teleportTo(tileX: number, tileY: number) {
+    this.tileX = tileX;
+    this.tileY = tileY;
+    this.targetTileX = tileX;
+    this.targetTileY = tileY;
+    this.moveQueue = [];
+    this.isMoving = false;
+    this.sprite.setPosition(
+      tileX * TILE_SIZE + TILE_SIZE / 2,
+      tileY * TILE_SIZE + TILE_SIZE / 2,
+    );
+    this.playAnimation('idle');
+  }
 
   moveTo(targetX: number, targetY: number) {
     this.moveQueue = this.buildPath(this.tileX, this.tileY, targetX, targetY);
@@ -102,7 +109,12 @@ export class Player {
 
   setActivityIcon(icon: string) { this.activityIcon.setText(icon); }
 
-  update(_delta: number, cursors: Phaser.Types.Input.Keyboard.CursorKeys | null, wasd: Record<string, Phaser.Input.Keyboard.Key> | null) {
+  update(
+    _delta: number,
+    cursors: Phaser.Types.Input.Keyboard.CursorKeys | null,
+    wasd: Record<string, Phaser.Input.Keyboard.Key> | null,
+    collision?: CollisionMap,
+  ) {
     if (this.isMoving) return;
     if (!cursors && !wasd) return;
 
@@ -119,7 +131,8 @@ export class Player {
 
     const newX = this.tileX + dx;
     const newY = this.tileY + dy;
-    if (newX >= 0 && newX < 60 && newY >= 0 && newY < 50) {
+    if (collision?.isBlocked(newX, newY)) return;
+    if (newX >= 0 && newX < 200 && newY >= 0 && newY < 200) {
       if      (dx < 0) this.playAnimation('walk_left');
       else if (dx > 0) this.playAnimation('walk_right');
       else if (dy < 0) this.playAnimation('walk_up');
@@ -174,14 +187,38 @@ export class Player {
     this.activityIcon.setText('');
 
     switch (anim) {
-      case 'walk_down':  this.body.play('player_walk_down',  true); break;
-      case 'walk_up':    this.body.play('player_walk_up',    true); break;
-      case 'walk_left':  this.body.play('player_walk_left',  true); break;
-      case 'walk_right': this.body.play('player_walk_right', true); break;
-      case 'work':   this.body.play('player_idle', true); this.activityIcon.setText('⚒'); break;
-      case 'study':  this.body.play('player_idle', true); this.activityIcon.setText('📖'); break;
-      case 'sleep':  this.body.play('player_idle', true); this.activityIcon.setText('💤'); break;
-      default:       this.body.play('player_idle', true); break;
+      case 'walk_left':
+        this.body.setFlipX(false);
+        this.body.play('player_walk', true);
+        break;
+      case 'walk_right':
+        this.body.setFlipX(true);
+        this.body.play('player_walk', true);
+        break;
+      case 'walk_up':
+      case 'walk_down':
+        // Side-view sprite has no front/back — use walk animation to keep movement feel
+        this.body.play('player_walk', true);
+        break;
+      case 'work':
+        this.body.setFlipX(false);
+        this.body.play('player_idle', true);
+        this.activityIcon.setText('⚒');
+        break;
+      case 'study':
+        this.body.setFlipX(false);
+        this.body.play('player_idle', true);
+        this.activityIcon.setText('📖');
+        break;
+      case 'sleep':
+        this.body.setFlipX(false);
+        this.body.play('player_idle', true);
+        this.activityIcon.setText('💤');
+        break;
+      default:
+        this.body.setFlipX(false);
+        this.body.play('player_idle', true);
+        break;
     }
   }
 
