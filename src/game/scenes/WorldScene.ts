@@ -9,31 +9,23 @@ import { NPC } from '../entities/NPC';
 import { TimeSystem } from '../systems/TimeSystem';
 import { useGameStore } from '@/src/store/gameStore';
 
-const TILE_COLORS: Record<number, number> = {
-  [T.GRASS]:       0x4A7C59,
-  [T.ROAD_H]:      0x606060,
-  [T.ROAD_V]:      0x606060,
-  [T.ROAD_X]:      0x555555,
-  [T.ROAD_TL]:     0x606060,
-  [T.ROAD_TR]:     0x606060,
-  [T.ROAD_BL]:     0x606060,
-  [T.ROAD_BR]:     0x606060,
-  [T.SIDEWALK]:    0xA0A070,
-  [T.DIRT]:        0x8B6914,
-  [T.WATER]:       0x1A6FA8,
-  [T.SAND]:        0xD4C47A,
-  [T.TREE]:        0x2D6A2D,
-  [T.FLOWER]:      0xE8A0D0,
-  [T.PARK_GRASS]:  0x5A9B69,
-};
-
-const TILE_BORDER_COLORS: Record<number, number> = {
-  [T.GRASS]:       0x3D6B49,
-  [T.ROAD_H]:      0x484848,
-  [T.ROAD_V]:      0x484848,
-  [T.ROAD_X]:      0x404040,
-  [T.SIDEWALK]:    0x888860,
-  [T.PARK_GRASS]:  0x4A8B59,
+// Kenney Tiny Town spritesheet: 12 cols × 11 rows, 16×16 per tile
+const KENNEY: Partial<Record<number, number>> = {
+  [T.GRASS]:      0,
+  [T.PARK_GRASS]: 1,
+  [T.ROAD_H]:     48,
+  [T.ROAD_V]:     48,
+  [T.ROAD_X]:     48,
+  [T.ROAD_TL]:    48,
+  [T.ROAD_TR]:    48,
+  [T.ROAD_BL]:    48,
+  [T.ROAD_BR]:    48,
+  [T.SIDEWALK]:   97,
+  [T.DIRT]:       24,
+  [T.SAND]:       24,
+  [T.WATER]:      8,
+  [T.TREE]:       4,
+  [T.FLOWER]:     1,
 };
 
 const ACTION_ICONS: Record<string, string> = {
@@ -42,9 +34,7 @@ const ACTION_ICONS: Record<string, string> = {
 
 export class WorldScene extends Phaser.Scene {
   private map!: number[][];
-  private tileGraphics!: Phaser.GameObjects.Graphics;
   private buildingGraphics!: Phaser.GameObjects.Graphics;
-  private overlayGraphics!: Phaser.GameObjects.Graphics;
 
   private player!: Player;
   private npcs: NPC[] = [];
@@ -66,9 +56,15 @@ export class WorldScene extends Phaser.Scene {
     super({ key: 'WorldScene' });
   }
 
+  preload() {
+    this.load.spritesheet('terrain', '/assets/tiles/tiny-town.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+  }
+
   create() {
     this.map = buildMap();
-    this.createTileTextures();
     this.renderMap();
     this.renderBuildings();
     this.createPlayer();
@@ -82,74 +78,29 @@ export class WorldScene extends Phaser.Scene {
     this.setupStoreSync();
   }
 
-  private createTileTextures() {
-    // Create one texture per tile type using Graphics
-    const g = this.add.graphics();
-
-    for (const [tileType, color] of Object.entries(TILE_COLORS)) {
-      const t = Number(tileType);
-      g.clear();
-      g.fillStyle(color);
-      g.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-
-      // Border for certain tiles
-      const border = TILE_BORDER_COLORS[t];
-      if (border !== undefined) {
-        g.lineStyle(1, border, 0.5);
-        g.strokeRect(0, 0, TILE_SIZE, TILE_SIZE);
-      }
-
-      // Road markings
-      if (t === T.ROAD_H) {
-        g.lineStyle(1, 0xFFFF00, 0.3);
-        g.lineBetween(0, TILE_SIZE / 2, TILE_SIZE, TILE_SIZE / 2);
-      }
-      if (t === T.ROAD_V) {
-        g.lineStyle(1, 0xFFFF00, 0.3);
-        g.lineBetween(TILE_SIZE / 2, 0, TILE_SIZE / 2, TILE_SIZE);
-      }
-
-      // Tree
-      if (t === T.TREE) {
-        g.fillStyle(0x1A4D1A);
-        g.fillCircle(TILE_SIZE / 2, TILE_SIZE / 2, 13);
-        g.fillStyle(0x2D7A2D);
-        g.fillCircle(TILE_SIZE / 2 - 4, TILE_SIZE / 2 - 2, 8);
-        g.fillStyle(0x3D9A3D);
-        g.fillCircle(TILE_SIZE / 2 + 3, TILE_SIZE / 2 - 3, 6);
-      }
-
-      // Park grass has a lighter shade + dots
-      if (t === T.PARK_GRASS) {
-        g.fillStyle(0x6BAA79, 0.4);
-        for (let i = 0; i < 3; i++) {
-          const px = 5 + i * 9;
-          const py = 5 + (i % 2) * 12;
-          g.fillCircle(px, py, 2);
-        }
-      }
-
-      g.generateTexture(`tile_${t}`, TILE_SIZE, TILE_SIZE);
-    }
-
-    g.destroy();
-  }
-
   private renderMap() {
-    this.tileGraphics = this.add.graphics();
-
-    // Use individual sprites for tiles for better performance with camera culling
     for (let y = 0; y < MAP_HEIGHT; y++) {
       for (let x = 0; x < MAP_WIDTH; x++) {
         const tileType = this.map[y][x];
-        const key = `tile_${tileType}`;
-        if (this.textures.exists(key)) {
-          const img = this.add.image(
-            x * TILE_SIZE + TILE_SIZE / 2,
-            y * TILE_SIZE + TILE_SIZE / 2,
-            key
-          );
-          img.setDepth(0);
+        const px = x * TILE_SIZE + TILE_SIZE / 2;
+        const py = y * TILE_SIZE + TILE_SIZE / 2;
+
+        // Always render a grass base first (so tree/transparent tiles look right)
+        const isTree = tileType === T.TREE;
+        const baseFrame = isTree ? 0 : (KENNEY[tileType] ?? 0);
+
+        const base = this.add.image(px, py, 'terrain', baseFrame);
+        base.setScale(2);
+        base.setDepth(0);
+
+        // Vertical road: rotate 90° so stripes run the right way
+        if (tileType === T.ROAD_V) base.setAngle(90);
+
+        // Tree overlay on top of grass base
+        if (isTree) {
+          const tree = this.add.image(px, py, 'terrain', KENNEY[T.TREE]!);
+          tree.setScale(2);
+          tree.setDepth(1);
         }
       }
     }
@@ -170,49 +121,82 @@ export class WorldScene extends Phaser.Scene {
     const w = b.widthTiles * TILE_SIZE;
     const h = b.heightTiles * TILE_SIZE;
 
-    // Foundation/shadow
-    this.buildingGraphics.fillStyle(0x000000, 0.15);
-    this.buildingGraphics.fillRect(x + 3, y + 3, w, h);
+    // Drop shadow
+    this.buildingGraphics.fillStyle(0x000000, 0.12);
+    this.buildingGraphics.fillRect(x + 4, y + 4, w, h);
 
     // Building body
     this.buildingGraphics.fillStyle(b.color);
     this.buildingGraphics.fillRect(x, y, w, h);
 
-    // Roof (top 30% of building)
-    const roofH = Math.floor(h * 0.35);
+    // Roof (top 30%)
+    const roofH = Math.floor(h * 0.30);
     this.buildingGraphics.fillStyle(b.roofColor);
     this.buildingGraphics.fillRect(x, y, w, roofH);
 
-    // Roof ridge line
-    this.buildingGraphics.lineStyle(2, Phaser.Display.Color.IntegerToColor(b.roofColor).darken(30).color);
+    // Roof ridge/gable accent
+    const ridgeColor = Phaser.Display.Color.IntegerToColor(b.roofColor).darken(25).color;
+    this.buildingGraphics.lineStyle(2, ridgeColor, 1);
     this.buildingGraphics.lineBetween(x, y + roofH, x + w, y + roofH);
 
-    // Windows
-    this.buildingGraphics.fillStyle(0xC8E8FF, 0.9);
-    const winSize = 6;
-    const winY = y + roofH + 6;
-    const cols = Math.floor(w / 16);
-    for (let i = 0; i < cols; i++) {
-      const winX = x + 8 + i * 16;
-      if (winX + winSize < x + w - 2) {
-        this.buildingGraphics.fillRect(winX, winY, winSize, winSize);
-        this.buildingGraphics.lineStyle(1, 0x90C8E8);
-        this.buildingGraphics.strokeRect(winX, winY, winSize, winSize);
+    // Roofline triangle hint (decorative)
+    this.buildingGraphics.fillStyle(ridgeColor, 0.3);
+    this.buildingGraphics.fillTriangle(
+      x + w / 2, y + 2,
+      x + 4,     y + roofH,
+      x + w - 4, y + roofH,
+    );
+
+    // Windows (two rows if tall enough)
+    const winW = 6;
+    const winH = 7;
+    const wallTop = y + roofH + 6;
+    const cols = Math.max(1, Math.floor((w - 16) / 16));
+    const windowRows = h > 80 ? 2 : 1;
+
+    for (let row = 0; row < windowRows; row++) {
+      const wy = wallTop + row * (winH + 8);
+      for (let col = 0; col < cols; col++) {
+        const wx = x + 8 + col * Math.floor((w - 16) / Math.max(cols, 1));
+        if (wx + winW >= x + w - 4) continue;
+
+        // Window frame
+        this.buildingGraphics.fillStyle(0x8BB8D4, 0.95);
+        this.buildingGraphics.fillRect(wx, wy, winW, winH);
+
+        // Window highlight
+        this.buildingGraphics.fillStyle(0xFFFFFF, 0.35);
+        this.buildingGraphics.fillRect(wx + 1, wy + 1, 2, 3);
+
+        // Window frame outline
+        this.buildingGraphics.lineStyle(1, 0x5A90B8, 0.8);
+        this.buildingGraphics.strokeRect(wx, wy, winW, winH);
       }
     }
 
-    // Door (center bottom)
+    // Door (centered at base)
     const doorW = 8;
-    const doorH = 10;
+    const doorH = 12;
     const doorX = x + Math.floor(w / 2) - doorW / 2;
     const doorY = y + h - doorH;
+
     this.buildingGraphics.fillStyle(b.roofColor);
     this.buildingGraphics.fillRect(doorX, doorY, doorW, doorH);
-    this.buildingGraphics.fillStyle(0x4A2C0A, 0.6);
+
+    // Door arch top
+    this.buildingGraphics.fillStyle(ridgeColor, 0.6);
+    this.buildingGraphics.fillRect(doorX, doorY, doorW, 3);
+
+    // Door handle
+    this.buildingGraphics.fillStyle(0xFFD700, 0.9);
     this.buildingGraphics.fillCircle(doorX + doorW - 2, doorY + doorH / 2, 1.5);
 
-    // Outline
-    this.buildingGraphics.lineStyle(1.5, 0x333333, 0.7);
+    // Step
+    this.buildingGraphics.fillStyle(0xCCCCCC, 0.8);
+    this.buildingGraphics.fillRect(doorX - 2, y + h - 3, doorW + 4, 3);
+
+    // Building outline
+    this.buildingGraphics.lineStyle(1.5, 0x333333, 0.6);
     this.buildingGraphics.strokeRect(x, y, w, h);
   }
 
@@ -252,10 +236,8 @@ export class WorldScene extends Phaser.Scene {
     this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
     this.input.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
-      const worldX = ptr.worldX;
-      const worldY = ptr.worldY;
-      const tx = Math.floor(worldX / TILE_SIZE);
-      const ty = Math.floor(worldY / TILE_SIZE);
+      const tx = Math.floor(ptr.worldX / TILE_SIZE);
+      const ty = Math.floor(ptr.worldY / TILE_SIZE);
       this.player.moveTo(tx, ty);
     });
   }
@@ -265,7 +247,7 @@ export class WorldScene extends Phaser.Scene {
     const gameMinutes = store.character?.gameAge ?? 0;
     this.timeSystem = new TimeSystem(gameMinutes);
 
-    this.timeSystem.onHourChange = (_, hour) => {
+    this.timeSystem.onHourChange = () => {
       this.updateDayNight();
       useGameStore.getState().setGameTime(this.timeSystem.totalGameMinutes);
     };
@@ -325,7 +307,6 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private setupStoreSync() {
-    // Sync HUD data to React store every 500ms
     this.time.addEvent({
       delay: 500,
       loop: true,
@@ -337,7 +318,7 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
-  update(time: number, delta: number) {
+  update(_time: number, delta: number) {
     this.timeSystem.update(delta);
     this.player.update(delta, this.cursors, this.wasd);
     this.checkInteractions();
@@ -363,9 +344,7 @@ export class WorldScene extends Phaser.Scene {
   private handleInteractKey() {
     if (Phaser.Input.Keyboard.JustDown(this.interactKey) && this.nearbyBuilding) {
       const action = this.nearbyBuilding.actions[0];
-      if (action) {
-        this.triggerAction(this.nearbyBuilding.id, action);
-      }
+      if (action) this.triggerAction(this.nearbyBuilding.id, action);
     }
   }
 
@@ -406,8 +385,7 @@ export class WorldScene extends Phaser.Scene {
     const py = this.player.currentTileY;
 
     for (const npc of this.npcs) {
-      const dist = npc.distanceTo(px, py);
-      npc.setHighlight(dist <= 3);
+      npc.setHighlight(npc.distanceTo(px, py) <= 3);
     }
   }
 
