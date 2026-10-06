@@ -32,7 +32,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (status >= 500) {
       this.logger.error(
         `${req.method} ${req.url} → ${status}`,
-        isProd ? undefined : (exception instanceof Error ? exception.stack : String(exception)),
+        exception instanceof Error ? exception.stack : String(exception),
       );
     } else {
       this.logger.warn(`${req.method} ${req.url} → ${status}`);
