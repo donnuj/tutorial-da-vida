@@ -34,7 +34,7 @@ const ACTION_ICONS: Record<string, string> = {
 
 export class WorldScene extends Phaser.Scene {
   private map!: number[][];
-  private buildingGraphics!: Phaser.GameObjects.Graphics;
+  private buildingTiles: Phaser.GameObjects.Image[] = [];
 
   private player!: Player;
   private npcs: NPC[] = [];
@@ -61,9 +61,14 @@ export class WorldScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
-    this.load.spritesheet('player', '/assets/characters/player.png', {
-      frameWidth: 32,
+    this.load.spritesheet('player', '/assets/characters/hero.png', {
+      frameWidth: 48,
       frameHeight: 64,
+    });
+    this.load.spritesheet('roguelike_chars', '/assets/characters/roguelike.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+      spacing: 1,
     });
   }
 
@@ -111,97 +116,81 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private renderBuildings() {
-    this.buildingGraphics = this.add.graphics();
-    this.buildingGraphics.setDepth(5);
-
     for (const building of BUILDINGS) {
       this.drawBuilding(building);
     }
   }
 
+  // Tiny-town tile frame constants (12 cols × 11 rows, 16×16)
+  // Row 6 = frames 72-83 (stone walls), Row 7 = frames 84-95 (wood walls w/ windows)
+  // Row 8 = frames 96-107 (floor), Row 9 = frames 108-119 (arch/stone)
+  private static readonly BT = {
+    ROOF_A:   63,  // row 5 col 3 — pitched roof tile
+    ROOF_B:   62,  // row 5 col 2 — roof variant
+    WALL_W:   84,  // row 7 col 0 — wood wall
+    WIN_W:    85,  // row 7 col 1 — wood wall + window
+    WALL_S:   72,  // row 6 col 0 — stone wall
+    WIN_S:    73,  // row 6 col 1 — stone wall + window
+    WALL_B:   60,  // row 5 col 0 — brick wall
+    WIN_B:    61,  // row 5 col 1 — brick wall + window
+    FLOOR:    96,  // row 8 col 0 — stone floor
+    DOOR:     87,  // row 7 col 3 — door arch
+  };
+
   private drawBuilding(b: BuildingDef) {
-    const x = b.tileX * TILE_SIZE;
-    const y = b.tileY * TILE_SIZE;
-    const w = b.widthTiles * TILE_SIZE;
-    const h = b.heightTiles * TILE_SIZE;
+    const BT = WorldScene.BT;
+    const W = b.widthTiles;
+    const H = b.heightTiles;
 
-    // Drop shadow
-    this.buildingGraphics.fillStyle(0x000000, 0.12);
-    this.buildingGraphics.fillRect(x + 4, y + 4, w, h);
+    // Pick tile style from building color
+    const bright = (b.color >> 16 & 0xff);
+    let wallFrame: number;
+    let winFrame: number;
+    let roofFrame: number;
 
-    // Building body
-    this.buildingGraphics.fillStyle(b.color);
-    this.buildingGraphics.fillRect(x, y, w, h);
-
-    // Roof (top 30%)
-    const roofH = Math.floor(h * 0.30);
-    this.buildingGraphics.fillStyle(b.roofColor);
-    this.buildingGraphics.fillRect(x, y, w, roofH);
-
-    // Roof ridge/gable accent
-    const ridgeColor = Phaser.Display.Color.IntegerToColor(b.roofColor).darken(25).color;
-    this.buildingGraphics.lineStyle(2, ridgeColor, 1);
-    this.buildingGraphics.lineBetween(x, y + roofH, x + w, y + roofH);
-
-    // Roofline triangle hint (decorative)
-    this.buildingGraphics.fillStyle(ridgeColor, 0.3);
-    this.buildingGraphics.fillTriangle(
-      x + w / 2, y + 2,
-      x + 4,     y + roofH,
-      x + w - 4, y + roofH,
-    );
-
-    // Windows (two rows if tall enough)
-    const winW = 6;
-    const winH = 7;
-    const wallTop = y + roofH + 6;
-    const cols = Math.max(1, Math.floor((w - 16) / 16));
-    const windowRows = h > 80 ? 2 : 1;
-
-    for (let row = 0; row < windowRows; row++) {
-      const wy = wallTop + row * (winH + 8);
-      for (let col = 0; col < cols; col++) {
-        const wx = x + 8 + col * Math.floor((w - 16) / Math.max(cols, 1));
-        if (wx + winW >= x + w - 4) continue;
-
-        // Window frame
-        this.buildingGraphics.fillStyle(0x8BB8D4, 0.95);
-        this.buildingGraphics.fillRect(wx, wy, winW, winH);
-
-        // Window highlight
-        this.buildingGraphics.fillStyle(0xFFFFFF, 0.35);
-        this.buildingGraphics.fillRect(wx + 1, wy + 1, 2, 3);
-
-        // Window frame outline
-        this.buildingGraphics.lineStyle(1, 0x5A90B8, 0.8);
-        this.buildingGraphics.strokeRect(wx, wy, winW, winH);
-      }
+    if (bright > 0xcc) {
+      // Warm/red hues → brick
+      wallFrame = BT.WALL_B; winFrame = BT.WIN_B; roofFrame = BT.ROOF_A;
+    } else if (bright > 0x88) {
+      // Mid hues → wood
+      wallFrame = BT.WALL_W; winFrame = BT.WIN_W; roofFrame = BT.ROOF_A;
+    } else {
+      // Dark/cool hues → stone
+      wallFrame = BT.WALL_S; winFrame = BT.WIN_S; roofFrame = BT.ROOF_B;
     }
 
-    // Door (centered at base)
-    const doorW = 8;
-    const doorH = 12;
-    const doorX = x + Math.floor(w / 2) - doorW / 2;
-    const doorY = y + h - doorH;
+    const doorCol = Math.floor(W / 2);
 
-    this.buildingGraphics.fillStyle(b.roofColor);
-    this.buildingGraphics.fillRect(doorX, doorY, doorW, doorH);
+    for (let ty = 0; ty < H; ty++) {
+      for (let tx = 0; tx < W; tx++) {
+        const px = b.tileX * TILE_SIZE + tx * TILE_SIZE + TILE_SIZE / 2;
+        const py = b.tileY * TILE_SIZE + ty * TILE_SIZE + TILE_SIZE / 2;
 
-    // Door arch top
-    this.buildingGraphics.fillStyle(ridgeColor, 0.6);
-    this.buildingGraphics.fillRect(doorX, doorY, doorW, 3);
+        let frame: number;
+        let tint: number;
 
-    // Door handle
-    this.buildingGraphics.fillStyle(0xFFD700, 0.9);
-    this.buildingGraphics.fillCircle(doorX + doorW - 2, doorY + doorH / 2, 1.5);
+        if (ty === 0) {
+          // Roof row
+          frame = roofFrame;
+          tint  = b.roofColor;
+        } else if (ty === H - 1 && tx === doorCol) {
+          // Door at bottom center
+          frame = BT.DOOR;
+          tint  = b.roofColor;
+        } else {
+          // Wall rows: window every other column on even rows
+          const showWin = (tx % 2 === 0) && ty > 0 && ty < H - 1;
+          frame = showWin ? winFrame : wallFrame;
+          tint  = b.color;
+        }
 
-    // Step
-    this.buildingGraphics.fillStyle(0xCCCCCC, 0.8);
-    this.buildingGraphics.fillRect(doorX - 2, y + h - 3, doorW + 4, 3);
-
-    // Building outline
-    this.buildingGraphics.lineStyle(1.5, 0x333333, 0.6);
-    this.buildingGraphics.strokeRect(x, y, w, h);
+        const img = this.add.image(px, py, 'terrain', frame);
+        img.setScale(2);
+        img.setDepth(5);
+        img.setTint(tint);
+        this.buildingTiles.push(img);
+      }
+    }
   }
 
   private createPlayer() {

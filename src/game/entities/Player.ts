@@ -10,14 +10,17 @@ interface PlayerConfig {
   name: string;
 }
 
-// Frame layout for player.png (512x64, 16 frames of 32x64):
-// 0-3: walk down, 4-7: walk left, 8-11: walk up, 12-15: walk right
+// hero.png: 240x448, 48x64 per frame, 5 cols x 7 rows
+// Row 0 (0-4): walk down | Row 1 (5-9): walk left
+// Row 2 (10-14): walk up | Row 3 (15-19): walk right
 const ANIM_FRAMES = {
-  walk_down:  { start: 0,  end: 3  },
-  walk_left:  { start: 4,  end: 7  },
-  walk_up:    { start: 8,  end: 11 },
-  walk_right: { start: 12, end: 15 },
+  walk_down:  { start: 0,  end: 4  },
+  walk_left:  { start: 5,  end: 9  },
+  walk_up:    { start: 10, end: 14 },
+  walk_right: { start: 15, end: 19 },
 };
+
+const PLAYER_SCALE = 0.65;
 
 export class Player {
   readonly sprite: Phaser.GameObjects.Container;
@@ -47,15 +50,15 @@ export class Player {
     const wx = tileX * TILE_SIZE + TILE_SIZE / 2;
     const wy = tileY * TILE_SIZE + TILE_SIZE / 2;
 
-    this.body = scene.add.sprite(0, -16, 'player', 0);
-    this.body.setScale(0.85);
+    this.body = scene.add.sprite(0, -20, 'player', 0);
+    this.body.setScale(PLAYER_SCALE);
 
-    this.nameLabel = scene.add.text(0, -48, name, {
+    this.nameLabel = scene.add.text(0, -52, name, {
       fontSize: '8px', fontFamily: 'monospace',
-      color: '#FFFFFF', stroke: '#000000', strokeThickness: 3, align: 'center',
+      color: '#FFD700', stroke: '#000000', strokeThickness: 3, align: 'center',
     }).setOrigin(0.5, 1);
 
-    this.activityIcon = scene.add.text(20, -26, '', { fontSize: '12px' }).setOrigin(0.5);
+    this.activityIcon = scene.add.text(22, -28, '', { fontSize: '12px' }).setOrigin(0.5);
 
     this.sprite = scene.add.container(wx, wy, [this.body, this.nameLabel, this.activityIcon]);
     this.sprite.setDepth(50);
@@ -77,7 +80,7 @@ export class Player {
     }
     this.scene.anims.create({
       key: 'player_idle',
-      frames: [{ key: 'player', frame: 0 }],
+      frames: [{ key: 'player', frame: 2 }],
       frameRate: 1,
     });
   }

@@ -7,23 +7,30 @@ import { createGameConfig } from '@/src/game/config';
 
 export default function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const gameRef = useRef<Phaser.Game | null>(null);
+  const gameRef      = useRef<Phaser.Game | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || gameRef.current) return;
+    const container = containerRef.current;
 
-    const config = createGameConfig(containerRef.current);
-    config.scene = [WorldScene];
+    const ro = new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect;
+      if (width <= 0 || height <= 0) return;
 
-    gameRef.current = new Phaser.Game(config);
+      if (!gameRef.current) {
+        // Initialize only when we know the real dimensions
+        const config = createGameConfig(container, width, height);
+        config.scene = [WorldScene];
+        gameRef.current = new Phaser.Game(config);
+      } else {
+        gameRef.current.scale.resize(width, height);
+      }
+    });
 
-    const handleResize = () => {
-      gameRef.current?.scale.resize(window.innerWidth, window.innerHeight);
-    };
-    window.addEventListener('resize', handleResize);
+    ro.observe(container);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      ro.disconnect();
       gameRef.current?.destroy(true);
       gameRef.current = null;
     };
@@ -32,14 +39,7 @@ export default function GameCanvas() {
   return (
     <div
       ref={containerRef}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        width: '100vw',
-        height: '100vh',
-        overflow: 'hidden',
-        background: '#1a1a2e',
-      }}
+      style={{ position: 'absolute', inset: 0, background: '#1e3010' }}
     />
   );
 }

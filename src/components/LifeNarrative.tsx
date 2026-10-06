@@ -414,6 +414,7 @@ export function LifeNarrative() {
             return;
           }
           setActiveEvent(ev);
+          break; // one event per tick — prevents rapid overwrites
         }
       }
 
@@ -446,6 +447,8 @@ export function LifeNarrative() {
         health: state.health, money: state.money, monthlyIncome: state.monthlyIncome,
         currentActivity: state.currentActivity, activityEndsAt: state.activityEndsAt,
         locationId: state.locationId, jobTitle: state.jobTitle,
+        monthlyExpenses: state.monthlyExpenses ?? 0,
+        studyProgress: state.studyProgress ?? 0,
       });
     } catch { setCompleting(false); }
   }, [completing, traitDeltas, setCharacter]);

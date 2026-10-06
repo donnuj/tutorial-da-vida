@@ -12,6 +12,8 @@ export interface CharacterState {
   health: number;
   money: number;
   monthlyIncome: number;
+  monthlyExpenses: number;
+  studyProgress: number;
   currentActivity: string | null;
   activityEndsAt: string | null;
   locationId: string;

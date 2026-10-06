@@ -1,12 +1,15 @@
 import Phaser from 'phaser';
 
-export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
+export function createGameConfig(parent: HTMLElement, width?: number, height?: number): Phaser.Types.Core.GameConfig {
+  const w = width  ?? (parent.clientWidth  || window.innerWidth);
+  const h = height ?? (parent.clientHeight || window.innerHeight);
+
   return {
     type: Phaser.AUTO,
     parent,
-    width: parent.clientWidth || window.innerWidth,
-    height: parent.clientHeight || window.innerHeight,
-    backgroundColor: '#1a1a2e',
+    width: w,
+    height: h,
+    backgroundColor: '#1e3010',
     pixelArt: true,
     roundPixels: true,
     antialias: false,
@@ -15,8 +18,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       arcade: { gravity: { x: 0, y: 0 }, debug: false },
     },
     scale: {
-      mode: 1, // Phaser.Scale.RESIZE
-      autoCenter: 1, // Phaser.Scale.CENTER_BOTH
+      mode: Phaser.Scale.NONE, // ResizeObserver handles all resizing
     },
     render: {
       powerPreference: 'high-performance',
