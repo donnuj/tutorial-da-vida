@@ -10,44 +10,56 @@ import { TimeSystem } from '../systems/TimeSystem';
 import { CollisionMap } from '../systems/CollisionMap';
 import { useGameStore } from '@/src/store/gameStore';
 
-// Kenney Tiny Town spritesheet: 12 cols × 11 rows, 16×16 per tile
-// Frame 0=grass, 96=stone pavement (road), 97=lighter stone (sidewalk)
-// Frame 52=red brick roof, 62=grey roof, 63=grey-purple roof, 64=orange roof
-// Frame 60-61=stone wall/window, 72-73=wood wall/window, 84-85=brick wall/window
+// Kenney Tiny Town — 12 cols × 11 rows, 16×16 por tile (sem espaçamento)
+// Frames identificados visualmente (debug grid):
+//   0-3 = grama | 4-11 = árvores | 12-15 = areia | 24-39 = chão claro
+//   48-51 = paredes pedra cinza | 52 = tijolo laranja | 53 = tijolo c/ janela
+//   54 = tijolo c/ arco | 55 = PICO laranja (topo de telhado)
+//   60 = pedra cinza porta | 61 = pedra c/ janela redonda
+//   72 = madeira simples | 73 = madeira c/ janelas | 74 = madeira c/ arco
+//   84 = madeira escura | 85 = madeira escura c/ janela | 87 = porta madeira
+//   88 = pedra cinza | 89 = pedra cinza c/ janela | 90 = arco pedra (porta)
+//   96 = pedra c/ borda pesada | 97 = pedra clara (calçada)
+//   108/109/110 = pedra cinza limpa (sem bordas) | 126 = paralelepípedo
 const KENNEY: Partial<Record<number, number>> = {
-  [T.GRASS]:      0,    // green grass
-  [T.PARK_GRASS]: 43,   // lighter green (park)
-  [T.ROAD_H]:     96,   // grey cobblestone (horizontal) — stone joints match road direction
-  [T.ROAD_V]:     96,   // not used (drawVerticalRoads handles this as solid rect)
-  [T.ROAD_X]:     96,
-  [T.ROAD_TL]:    96,
-  [T.ROAD_TR]:    96,
-  [T.ROAD_BL]:    96,
-  [T.ROAD_BR]:    96,
-  [T.SIDEWALK]:   97,   // lighter grey — calçada/sidewalk
-  [T.DIRT]:       24,   // sandy dirt
-  [T.SAND]:       25,
+  [T.GRASS]:      0,
+  [T.PARK_GRASS]: 36,   // chão claro/creme — diferencia do grass
+  [T.SIDEWALK]:   97,   // pedra clara com padrão sutil
+  [T.DIRT]:       12,
+  [T.SAND]:       14,
   [T.WATER]:      8,
-  [T.TREE]:       4,    // dark tree canopy
-  [T.FLOWER]:     5,    // light bush/shrub
+  [T.TREE]:       4,
+  [T.FLOWER]:     5,
 };
 
-// Distinct visual style per building — no tinting, natural Kenney colors
+const ROAD_TYPES = new Set([
+  T.ROAD_H, T.ROAD_V, T.ROAD_X,
+  T.ROAD_TL, T.ROAD_TR, T.ROAD_BL, T.ROAD_BR,
+]);
+
+// wall=parede; win=parede c/ janela; roof=topo telhado; door=porta; floor=chão
+// f52=tijolo laranja | f54=tijolo c/ arco | f72=madeira | f73=madeira c/ janela
+// f76=pedra escura  | f77=pedra escura c/ janela | f84=madeira escura | f85=madeira escura c/ janela
+// f88=pedra cinza   | f89=pedra cinza c/ janela   | f87=porta madeira  | f90=arco pedra
 const BUILDING_STYLES: Record<string, {
-  wall: number; win: number; roof: number; floor: number;
+  wall: number; win: number; roof: number; floor: number; door: number;
 }> = {
-  player_home:      { wall: 72, win: 73, roof: 52, floor: 96 },
-  neighbor_house_1: { wall: 84, win: 85, roof: 64, floor: 96 },
-  neighbor_house_2: { wall: 72, win: 73, roof: 64, floor: 96 },
-  neighbor_house_3: { wall: 84, win: 85, roof: 52, floor: 96 },
-  market:           { wall: 60, win: 61, roof: 52, floor: 97 },
-  restaurant:       { wall: 72, win: 73, roof: 64, floor: 96 },
-  bank:             { wall: 60, win: 61, roof: 63, floor: 97 },
-  school:           { wall: 60, win: 61, roof: 64, floor: 97 },
-  library:          { wall: 84, win: 85, roof: 52, floor: 96 },
-  office:           { wall: 60, win: 61, roof: 63, floor: 97 },
-  hospital:         { wall: 60, win: 61, roof: 52, floor: 97 },
-  bus_stop:         { wall: 60, win: 60, roof: 63, floor: 97 },
+  // Residencial — madeira clara (aconchegante)
+  player_home:      { wall: 72, win: 73, roof: 52, floor: 96, door: 87 },
+  neighbor_house_1: { wall: 84, win: 85, roof: 52, floor: 96, door: 87 },
+  neighbor_house_2: { wall: 72, win: 73, roof: 52, floor: 96, door: 87 },
+  neighbor_house_3: { wall: 84, win: 85, roof: 52, floor: 96, door: 87 },
+  // Comercial — tijolo laranja (vibrante, visível)
+  market:           { wall: 52, win: 54, roof: 52, floor: 97, door: 87 },
+  restaurant:       { wall: 72, win: 73, roof: 52, floor: 96, door: 87 },
+  // Oficial — pedra escura (imponente)
+  bank:             { wall: 76, win: 77, roof: 52, floor: 97, door: 87 },
+  // Institucional — pedra cinza
+  school:           { wall: 88, win: 89, roof: 52, floor: 97, door: 90 },
+  library:          { wall: 84, win: 85, roof: 52, floor: 96, door: 87 },
+  office:           { wall: 76, win: 77, roof: 52, floor: 97, door: 87 },
+  hospital:         { wall: 88, win: 89, roof: 52, floor: 97, door: 90 },
+  bus_stop:         { wall: 72, win: 73, roof: 52, floor: 97, door: 87 },
 };
 
 const ACTION_ICONS: Record<string, string> = {
@@ -86,10 +98,15 @@ export class WorldScene extends Phaser.Scene {
     this.load.spritesheet('indoor', '/assets/tiles/kenney-indoor.png', {
       frameWidth: 16, frameHeight: 16, spacing: 1,
     });
-    this.load.spritesheet('player', '/assets/characters/player.png', {
-      frameWidth: 32, frameHeight: 64,
-    });
-    // Furniture sprites (CC0, from OpenGameArt Crimelike pack — 32×32 top-down)
+    // Puny Characters CC0 — 768×256, 32×32 per frame, 24 cols × 8 rows
+    const punyBase = '/assets/puny-chars/Puny-Characters';
+    this.load.spritesheet('char_base',         `${punyBase}/Character-Base.png`,  { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('char_warrior_blue', `${punyBase}/Warrior-Blue.png`,    { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('char_warrior_red',  `${punyBase}/Warrior-Red.png`,     { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('char_soldier_blue', `${punyBase}/Soldier-Blue.png`,    { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('char_soldier_yellow', `${punyBase}/Soldier-Yellow.png`,{ frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('char_mage_cyan',    `${punyBase}/Mage-Cyan.png`,       { frameWidth: 32, frameHeight: 32 });
+    // Furniture sprites (CC0, Crimelike pack — 32×32 top-down)
     this.load.image('f_bed',     '/assets/furniture/bed_wooden_s.png');
     this.load.image('f_bath',    '/assets/furniture/bath_full_e.png');
     this.load.image('f_sofa',    '/assets/furniture/sofa_down_1.png');
@@ -122,17 +139,17 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private renderMap() {
-    // Draw vertical roads as seamless solid rectangles — tile-based approach creates
-    // visible horizontal seams (tile shadow edges) that look like railroad tracks
-    this.drawVerticalRoads();
-
     for (let y = 0; y < MAP_HEIGHT; y++) {
       for (let x = 0; x < MAP_WIDTH; x++) {
         const tileType = this.map[y][x];
-        if (tileType === T.ROAD_V) continue; // handled by drawVerticalRoads()
-
         const px = x * TILE_SIZE + TILE_SIZE / 2;
         const py = y * TILE_SIZE + TILE_SIZE / 2;
+
+        if (ROAD_TYPES.has(tileType)) {
+          // Asfalto cinza sólido — sem sprite para evitar padrões direcional
+          this.add.rectangle(px, py, TILE_SIZE, TILE_SIZE, 0x888c94).setDepth(0);
+          continue;
+        }
 
         const isTree = tileType === T.TREE;
         const frame = isTree ? 0 : (KENNEY[tileType] ?? 0);
@@ -145,28 +162,6 @@ export class WorldScene extends Phaser.Scene {
           const tree = this.add.image(px, py, 'terrain', 4);
           tree.setScale(2);
           tree.setDepth(1);
-        }
-      }
-    }
-  }
-
-  private drawVerticalRoads() {
-    // Group consecutive ROAD_V tiles in the same column into single rectangles
-    for (let x = 0; x < MAP_WIDTH; x++) {
-      let startY = -1;
-      for (let y = 0; y <= MAP_HEIGHT; y++) {
-        const isRoad = y < MAP_HEIGHT && this.map[y][x] === T.ROAD_V;
-        if (isRoad && startY === -1) {
-          startY = y;
-        } else if (!isRoad && startY !== -1) {
-          const px = x * TILE_SIZE;
-          const py = startY * TILE_SIZE;
-          const w  = TILE_SIZE;
-          const h  = (y - startY) * TILE_SIZE;
-          // Match the average colour of frame 96 (cobblestone), drawn solid — no seams
-          const rect = this.add.rectangle(px + w / 2, py + h / 2, w, h, 0x888898);
-          rect.setDepth(0);
-          startY = -1;
         }
       }
     }
@@ -196,15 +191,17 @@ export class WorldScene extends Phaser.Scene {
     const style = BUILDING_STYLES[b.id] ?? BUILDING_STYLES['player_home'];
     const W = b.widthTiles;
     const H = b.heightTiles;
-    const doorCol = Math.floor(W / 2);
+    const doorCol = b.doorX ?? Math.floor(W / 2);
+    const mid = Math.floor(W / 2);
 
-    // Ground floor (stone pavement under the building)
+    // Telhado = top 40% do prédio (min 1, max H-2 linhas)
+    const roofRows = Math.min(Math.max(1, Math.floor(H * 0.4)), H - 2);
+
+    // Chão sob o prédio (pavement visível por transparência do tile)
     for (let tx = 0; tx < W; tx++) {
       const px = b.tileX * TILE_SIZE + tx * TILE_SIZE + TILE_SIZE / 2;
       const py = b.tileY * TILE_SIZE + (H - 1) * TILE_SIZE + TILE_SIZE / 2;
-      const floor = this.add.image(px, py, 'terrain', style.floor);
-      floor.setScale(2);
-      floor.setDepth(4);
+      this.add.image(px, py, 'terrain', style.floor).setScale(2).setDepth(4);
     }
 
     for (let ty = 0; ty < H; ty++) {
@@ -215,26 +212,31 @@ export class WorldScene extends Phaser.Scene {
         let frame: number;
 
         if (ty === 0) {
-          // Top roof row — alternate tiles for a ridge texture
-          frame = tx % 2 === 0 ? style.roof : style.roof + 1;
-        } else if (ty === H - 1 && tx === doorCol) {
-          // Door at front center
-          frame = 87;
-        } else {
-          // Wall rows: windows every other column on mid rows
-          const showWin = (tx % 2 === 0) && ty > 0 && ty < H - 1;
+          // Linha do topo: janelinha (53) no centro, tijolo sólido nas laterais
+          frame = (tx === mid) ? 53 : style.roof;
+        } else if (ty < roofRows) {
+          // Corpo do telhado: tile uniforme (sem alternância)
+          frame = style.roof;
+        } else if (ty === H - 1) {
+          // Linha da porta (frente do prédio)
+          frame = (tx === doorCol) ? style.door : style.wall;
+        } else if (ty === H - 2) {
+          // Linha das janelas — janela a cada 2 tiles, longe das bordas
+          const showWin = tx > 0 && tx < W - 1 && (tx % 2 === 1);
           frame = showWin ? style.win : style.wall;
+        } else {
+          // Parede lisa
+          frame = style.wall;
         }
 
         const img = this.add.image(px, py, 'terrain', frame);
         img.setScale(2);
         img.setDepth(5);
-        // No heavy tinting — let the Kenney pixel art show naturally
         this.buildingTiles.push(img);
       }
     }
 
-    // Building label — clean and minimal
+    // Label do prédio
     const cx = (b.tileX + W / 2) * TILE_SIZE;
     const cy = b.tileY * TILE_SIZE - 4;
     this.add.text(cx, cy, b.label, {
@@ -258,8 +260,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private createNPCs() {
-    NPCS.forEach((def, i) => {
-      this.npcs.push(new NPC(this, def, i));
+    NPCS.forEach(def => {
+      this.npcs.push(new NPC(this, def));
     });
   }
 

@@ -1,22 +1,22 @@
 import Phaser from 'phaser';
 import { TILE_SIZE, type NpcDef } from '../world/NeighborhoodMap';
 
-// player.png: 512x64, 32x64 per frame, civilian side-view
-// Different frame offsets per NPC to give visual variety within the same sheet
-const NPC_SCALE = 0.7;
+// Puny Characters (CC0) — each sheet is 768×256, 32×32 per frame, 24 cols × 8 rows
+// Row 0 (frames  0-23): facing DOWN  — walk frames: cols 0-3
+// Row 1 (frames 24-47): facing LEFT  — walk frames: cols 0-3
+// Row 2 (frames 48-71): facing RIGHT — walk frames: cols 0-3
+// Row 3 (frames 72-95): facing UP    — walk frames: cols 0-3
+const NPC_SCALE = 0.9;
 
-// Tints that work well on the beige/brown civilian sprite
-const NPC_TINTS = [
-  0xffc8a0, // skin warm
-  0xa0d0ff, // blue shirt
-  0xffd080, // yellow shirt
-  0xc0ffa0, // green shirt
-  0xffb0b0, // red/pink
-];
-
-// Walk cycle: frames 0-7 (left-facing). Flip for right.
-const WALK_FRAMES = { start: 0, end: 7 };
-const IDLE_FRAME  = 0;
+// Map each NPC id to a specific Puny Character variant
+const NPC_SPRITE: Record<string, string> = {
+  ana:               'char_warrior_blue',
+  carlos:            'char_soldier_blue',
+  professora_maria:  'char_mage_cyan',
+  seu_jose:          'char_soldier_yellow',
+  lucia:             'char_warrior_red',
+};
+const DEFAULT_SPRITE = 'char_base';
 
 export class NPC {
   readonly id: string;
@@ -34,8 +34,9 @@ export class NPC {
   private tileY: number;
   private isMoving = false;
   private waitTimer: Phaser.Time.TimerEvent | null = null;
+  private spriteKey: string;
 
-  constructor(scene: Phaser.Scene, def: NpcDef, npcIndex = 0) {
+  constructor(scene: Phaser.Scene, def: NpcDef) {
     this.scene    = scene;
     this.id       = def.id;
     this.name     = def.name;
@@ -43,15 +44,15 @@ export class NPC {
     this.schedule = def.schedule;
     this.tileX    = def.startTileX;
     this.tileY    = def.startTileY;
+    this.spriteKey = NPC_SPRITE[def.id] ?? DEFAULT_SPRITE;
 
     const wx = this.tileX * TILE_SIZE + TILE_SIZE / 2;
     const wy = this.tileY * TILE_SIZE + TILE_SIZE / 2;
 
-    this.body = scene.add.sprite(0, -16, 'player', IDLE_FRAME);
+    this.body = scene.add.sprite(0, -4, this.spriteKey, 0);
     this.body.setScale(NPC_SCALE);
-    this.body.setTint(NPC_TINTS[npcIndex % NPC_TINTS.length]);
 
-    this.nameLabel = scene.add.text(0, -48, def.name, {
+    this.nameLabel = scene.add.text(0, -26, def.name, {
       fontSize: '8px', fontFamily: 'monospace',
       color: '#e8d5b0', stroke: '#000000', strokeThickness: 3, align: 'center',
     }).setOrigin(0.5, 1);
@@ -59,8 +60,8 @@ export class NPC {
     this.sprite = scene.add.container(wx, wy, [this.body, this.nameLabel]);
     this.sprite.setDepth(40);
 
-    this.ensureAnimations(scene);
-    this.body.play('player_idle', true);
+    this.ensureAnimations(scene, this.spriteKey);
+    this.body.play(`${this.spriteKey}_idle`, true);
     this.scheduleNextMove();
   }
 
@@ -75,26 +76,24 @@ export class NPC {
     this.nameLabel.setColor(on ? '#FFD700' : '#e8d5b0');
   }
 
-  private ensureAnimations(scene: Phaser.Scene) {
-    if (scene.anims.exists('player_walk')) return;
+  private ensureAnimations(scene: Phaser.Scene, key: string) {
+    if (scene.anims.exists(`${key}_idle`)) return;
 
-    scene.anims.create({
-      key: 'player_walk',
-      frames: scene.anims.generateFrameNumbers('player', WALK_FRAMES),
-      frameRate: 8,
-      repeat: -1,
-    });
-    scene.anims.create({
-      key: 'player_idle',
-      frames: [{ key: 'player', frame: IDLE_FRAME }],
-      frameRate: 1,
-    });
+    scene.anims.create({ key: `${key}_idle`,       frames: [{ key, frame: 0 }],                         frameRate: 1 });
+    scene.anims.create({ key: `${key}_walk_down`,  frames: [0,1,2,3].map(f => ({ key, frame: f })),     frameRate: 8, repeat: -1 });
+    scene.anims.create({ key: `${key}_walk_left`,  frames: [24,25,26,27].map(f => ({ key, frame: f })), frameRate: 8, repeat: -1 });
+    scene.anims.create({ key: `${key}_walk_right`, frames: [48,49,50,51].map(f => ({ key, frame: f })), frameRate: 8, repeat: -1 });
+    scene.anims.create({ key: `${key}_walk_up`,    frames: [72,73,74,75].map(f => ({ key, frame: f })), frameRate: 8, repeat: -1 });
   }
 
   private playWalk(toX: number, toY: number, prevX: number, prevY: number) {
     const dx = toX - prevX;
-    this.body.setFlipX(dx > 0);
-    this.body.play('player_walk', true);
+    const dy = toY - prevY;
+    const key = this.spriteKey;
+    if      (dx < 0) this.body.play(`${key}_walk_left`,  true);
+    else if (dx > 0) this.body.play(`${key}_walk_right`, true);
+    else if (dy < 0) this.body.play(`${key}_walk_up`,    true);
+    else             this.body.play(`${key}_walk_down`,  true);
   }
 
   private scheduleNextMove() {
@@ -122,8 +121,7 @@ export class NPC {
       const step = path.shift();
       if (!step) {
         this.isMoving = false;
-        this.body.setFlipX(false);
-        this.body.play('player_idle', true);
+        this.body.play(`${this.spriteKey}_idle`, true);
         this.scheduleNextMove();
         return;
       }

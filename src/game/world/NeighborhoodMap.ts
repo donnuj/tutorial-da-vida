@@ -149,6 +149,41 @@ export function buildMap(): number[][] {
   map[28][20] = tr; map[28][21] = tr;
   map[27][20] = tr; map[27][21] = tr;
 
+  // ── Árvores nos jardins residenciais (NW, entre prédios e rua) ──
+  // Entre a zona residencial e a rua y=7/8/9
+  for (let x = 1; x <= 10; x += 3) { map[10][x] = tr; }
+  // Lateral direita das casas (entre residencial e a rua x=11/12/13)
+  for (let y = 1; y <= 6; y += 2) { map[y][10] = tr; }
+  for (let y = 11; y <= 16; y += 2) { map[y][10] = tr; }
+  // Cantinhos de grama nos arredores
+  map[1][14] = tr; map[2][14] = tr; map[3][14] = tr;
+  map[4][14] = tr; map[5][14] = tr;
+  map[11][14] = tr; map[12][14] = tr; map[13][14] = tr;
+  map[14][14] = tr; map[15][14] = tr;
+
+  // ── Árvores na zona comercial (NE) ──
+  // Linha de árvores na borda superior (y=1) entre x=32 e x=46
+  for (let x = 45; x <= 46; x++) { map[1][x] = tr; map[2][x] = tr; }
+  // Árvores no corredor entre commercial e a rua vertical x=30
+  for (let y = 1; y <= 6; y += 2) { map[y][31] = tr; }
+  for (let y = 11; y <= 17; y += 2) { map[y][31] = tr; }
+
+  // ── Árvores na zona educacional (SW) ──
+  for (let x = 1; x <= 10; x += 3) { map[38][x] = tr; }
+  for (let x = 14; x <= 27; x += 4) { map[38][x] = tr; }
+
+  // ── Árvores na zona de serviços (SE) ──
+  for (let y = 38; y <= 48; y += 3) { map[y][50] = tr; }
+  for (let y = 38; y <= 48; y += 3) { map[y][51] = tr; }
+
+  // ── Fileira de árvores na borda sul do mapa ──
+  for (let x = 0; x < MAP_WIDTH; x += 4) { map[49][x] = tr; }
+  // Borda norte
+  for (let x = 0; x < MAP_WIDTH; x += 5) { map[0][x] = tr; }
+  // Bordas leste e oeste
+  for (let y = 5; y <= 48; y += 5) { map[y][0] = tr; }
+  for (let y = 5; y <= 48; y += 5) { map[y][59] = tr; }
+
   return map;
 }
 

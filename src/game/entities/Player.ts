@@ -11,11 +11,19 @@ interface PlayerConfig {
   name: string;
 }
 
-// player.png: 512x64, 32x64 per frame, 16 frames — civilian side-view walk cycle
-// Frames 0-7: walking cycle (left-facing). Flip X for right-facing.
-const WALK_FRAMES  = { start: 0, end: 7 };
+// Puny Characters (CC0) — Character-Base.png: 768×256, 32×32 per frame, 24 cols × 8 rows
+// Row 0 (frames  0-23): facing DOWN  — walk frames in cols 0-5
+// Row 1 (frames 24-47): facing LEFT  — walk frames in cols 0-5
+// Row 2 (frames 48-71): facing RIGHT — walk frames in cols 0-5
+// Row 3 (frames 72-95): facing UP    — walk frames in cols 0-5
+const ANIM: Record<string, number[]> = {
+  down:  [0,  1,  2,  3],
+  left:  [24, 25, 26, 27],
+  right: [48, 49, 50, 51],
+  up:    [72, 73, 74, 75],
+};
 const IDLE_FRAME   = 0;
-const PLAYER_SCALE = 0.7;
+const PLAYER_SCALE = 0.9;
 
 export class Player {
   readonly sprite: Phaser.GameObjects.Container;
@@ -45,15 +53,15 @@ export class Player {
     const wx = tileX * TILE_SIZE + TILE_SIZE / 2;
     const wy = tileY * TILE_SIZE + TILE_SIZE / 2;
 
-    this.body = scene.add.sprite(0, -16, 'player', IDLE_FRAME);
+    this.body = scene.add.sprite(0, -4, 'char_base', IDLE_FRAME);
     this.body.setScale(PLAYER_SCALE);
 
-    this.nameLabel = scene.add.text(0, -48, name, {
+    this.nameLabel = scene.add.text(0, -26, name, {
       fontSize: '8px', fontFamily: 'monospace',
       color: '#FFD700', stroke: '#000000', strokeThickness: 3, align: 'center',
     }).setOrigin(0.5, 1);
 
-    this.activityIcon = scene.add.text(18, -24, '', { fontSize: '12px' }).setOrigin(0.5);
+    this.activityIcon = scene.add.text(20, -4, '', { fontSize: '12px' }).setOrigin(0.5);
 
     this.sprite = scene.add.container(wx, wy, [this.body, this.nameLabel, this.activityIcon]);
     this.sprite.setDepth(50);
@@ -63,17 +71,19 @@ export class Player {
   }
 
   private registerAnimations() {
-    if (this.scene.anims.exists('player_walk')) return;
+    if (this.scene.anims.exists('player_walk_down')) return;
 
-    this.scene.anims.create({
-      key: 'player_walk',
-      frames: this.scene.anims.generateFrameNumbers('player', WALK_FRAMES),
-      frameRate: 8,
-      repeat: -1,
-    });
+    for (const [dir, frames] of Object.entries(ANIM)) {
+      this.scene.anims.create({
+        key: `player_walk_${dir}`,
+        frames: frames.map(f => ({ key: 'char_base', frame: f })),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
     this.scene.anims.create({
       key: 'player_idle',
-      frames: [{ key: 'player', frame: IDLE_FRAME }],
+      frames: [{ key: 'char_base', frame: IDLE_FRAME }],
       frameRate: 1,
     });
   }
@@ -187,36 +197,23 @@ export class Player {
     this.activityIcon.setText('');
 
     switch (anim) {
-      case 'walk_left':
-        this.body.setFlipX(false);
-        this.body.play('player_walk', true);
-        break;
-      case 'walk_right':
-        this.body.setFlipX(true);
-        this.body.play('player_walk', true);
-        break;
-      case 'walk_up':
-      case 'walk_down':
-        // Side-view sprite has no front/back — use walk animation to keep movement feel
-        this.body.play('player_walk', true);
-        break;
+      case 'walk_down':  this.body.play('player_walk_down',  true); break;
+      case 'walk_left':  this.body.play('player_walk_left',  true); break;
+      case 'walk_right': this.body.play('player_walk_right', true); break;
+      case 'walk_up':    this.body.play('player_walk_up',    true); break;
       case 'work':
-        this.body.setFlipX(false);
         this.body.play('player_idle', true);
         this.activityIcon.setText('⚒');
         break;
       case 'study':
-        this.body.setFlipX(false);
         this.body.play('player_idle', true);
         this.activityIcon.setText('📖');
         break;
       case 'sleep':
-        this.body.setFlipX(false);
         this.body.play('player_idle', true);
         this.activityIcon.setText('💤');
         break;
       default:
-        this.body.setFlipX(false);
         this.body.play('player_idle', true);
         break;
     }
