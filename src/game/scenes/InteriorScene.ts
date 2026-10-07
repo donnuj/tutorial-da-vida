@@ -5,15 +5,13 @@ import { INTERIORS, type InteriorDef, type FurnitureDef } from '../world/Interio
 
 const TILE_SIZE = 32;
 
-// Tiny-Town frames used for walls (already cached by WorldScene)
-const WALL_FRAME   = 72;  // wood wall
-const WALL_FRAME2  = 60;  // stone wall (bathroom area)
-
-// roguelikeIndoor frames (26 cols × 18 rows, 0-indexed = row*26+col)
-// Row 12 (wood-coloured stone): frame 312 — main floor
-// Row 8  (grey stone):          frame 208 — bathroom floor
-const FLOOR_WOOD   = 312;
-const FLOOR_STONE  = 208;
+// Tiny-Town (terrain) frames — 12 cols × 11 rows, 16×16, sem spacing
+// Floor: 25 = piso warm/creme, 96 = pedra cinza limpa (banheiro)
+// Wall:  72 = madeira, 60 = pedra
+const WALL_FRAME  = 72;
+const WALL_FRAME2 = 60;
+const FLOOR_WOOD  = 25;
+const FLOOR_STONE = 96;
 
 // Mapping from furniture id → loaded image key (CC0 crimelike sprites, 32×32)
 const FURNITURE_SPRITE: Record<string, string> = {
@@ -75,6 +73,7 @@ export class InteriorScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, mapW * TILE_SIZE, mapH * TILE_SIZE);
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
     this.cameras.main.setZoom(2.5);
+    this.cameras.main.setBackgroundColor('#c4a882');
 
     this.cursors    = this.input.keyboard!.createCursorKeys();
     this.wasd = {
@@ -114,20 +113,21 @@ export class InteriorScene extends Phaser.Scene {
         const py = y * TILE_SIZE + TILE_SIZE / 2;
         const isBathroom = x >= 8 && y <= 5;
 
-        // Floor under every tile (visible behind walls too)
-        const floorFrame = isBathroom ? FLOOR_STONE : FLOOR_WOOD;
-        const floor = this.add.image(px, py, 'indoor', floorFrame);
-        floor.setScale(2).setDepth(0);
-
         if (type === 1) {
-          const wallFrame = isBathroom ? WALL_FRAME2 : WALL_FRAME;
-          const wall = this.add.image(px, py, 'terrain', wallFrame);
-          wall.setScale(2).setDepth(2);
-        }
+          // Parede sólida — tom escuro diferenciando área
+          this.add.rectangle(px, py, TILE_SIZE, TILE_SIZE, 0x4a3020).setDepth(2);
+        } else {
+          // Chão: warm tan para salas, cinza azulado para banheiro
+          const floorFrame = isBathroom ? FLOOR_STONE : FLOOR_WOOD;
+          const floor = this.add.image(px, py, 'terrain', floorFrame);
+          floor.setScale(2).setDepth(0);
 
-        if (type === 2) {
-          this.add.text(px, py, '🚪', { fontSize: '16px' })
-            .setOrigin(0.5).setDepth(3);
+          if (type === 2) {
+            // Porta de saída — marcador visual sutil
+            this.add.rectangle(px, py, TILE_SIZE - 4, TILE_SIZE - 4, 0x6a4830, 0.6).setDepth(1);
+            this.add.text(px, py, '🚪', { fontSize: '14px' })
+              .setOrigin(0.5).setDepth(3);
+          }
         }
       }
     }

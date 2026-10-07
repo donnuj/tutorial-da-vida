@@ -10,199 +10,250 @@ import { BUILDINGS } from '@/src/game/world/NeighborhoodMap';
 
 const GameCanvas = dynamic(() => import('@/src/components/GameCanvas'), {
   ssr: false,
-  loading: () => <div style={{ position: 'absolute', inset: 0, background: '#1a2a0a' }} />,
+  loading: () => <div style={{ width: '100%', height: '100%', background: '#0a0f1a' }} />,
 });
 
-const ACTION_ICONS: Record<string, string>  = { work:'⚒', study:'📖', sleep:'💤', shop:'🛒', visit:'👋', idle:'💬' };
+const ACTION_ICONS:  Record<string, string> = { work:'⚒', study:'📖', sleep:'💤', shop:'🛒', visit:'👋', idle:'💬' };
 const ACTION_LABELS: Record<string, string> = { work:'Trabalhar', study:'Estudar', sleep:'Dormir', shop:'Comprar', visit:'Visitar', idle:'Descansar' };
 
-// ─── Minimal floating stat bar ────────────────────────────────────────────────
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const BG      = '#080c14';
+const PANEL   = '#0d1421';
+const BORDER  = '#1a253d';
+const HEADER  = '#0a1020';
+const ACCENT  = '#7aaee8';
+const TEXT    = '#c8d8f0';
+const MUTED   = '#3d4e6a';
+const SUCCESS = '#45b075';
+const DANGER  = '#e05555';
 
-function MiniBar({ value, color }: { value: number; color: string }) {
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function Pane({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{
-      width: 48, height: 5,
-      background: 'rgba(255,255,255,0.08)',
-      borderRadius: 3, overflow: 'hidden',
-    }}>
-      <div style={{
-        height: '100%',
-        width: `${Math.max(0, Math.min(100, value))}%`,
-        background: color,
-        borderRadius: 3,
-        transition: 'width 0.6s ease',
-      }} />
+    <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 3, overflow: 'hidden', ...style }}>
+      {children}
     </div>
   );
 }
 
-function FloatingHUD() {
-  const character        = useGameStore(s => s.character);
-  const getTimeStr       = useGameStore(s => s.getTimeString);
-  const getAgeStr        = useGameStore(s => s.getAgeString);
-  const nearbyBuildingId = useGameStore(s => s.nearbyBuildingId);
-  const triggerAction    = useGameStore(s => s.triggerAction);
-
-  if (!character) return null;
-
-  const nearby = nearbyBuildingId ? BUILDINGS.find(b => b.id === nearbyBuildingId) : null;
-  const actIcon = character.currentActivity ? ACTION_ICONS[character.currentActivity] ?? '' : null;
-
+function SectionHead({ title }: { title: string }) {
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 50 }}>
+    <div style={{
+      padding: '4px 9px',
+      background: HEADER,
+      borderBottom: `1px solid ${BORDER}`,
+      fontSize: 8, letterSpacing: 1.2,
+      fontFamily: 'monospace', color: MUTED,
+      textTransform: 'uppercase',
+    }}>{title}</div>
+  );
+}
 
-      {/* ── Top-right: clock ── */}
-      <div style={{
-        position: 'absolute', top: 12, right: 14,
-        background: 'rgba(5,10,20,0.82)',
-        border: '1px solid rgba(61,90,138,0.5)',
-        borderRadius: 5,
-        padding: '5px 11px',
-        textAlign: 'center',
-      }}>
-        <div style={{
-          fontFamily: 'var(--font-pixel)',
-          fontSize: 22, color: '#7aaee8', lineHeight: 1,
-        }}>
-          {getTimeStr()}
+function StatBar({ icon, label, value, color }: { icon: string; label: string; value: number; color: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 9px' }}>
+      <span style={{ fontSize: 11, width: 13, textAlign: 'center', lineHeight: 1 }}>{icon}</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+          <span style={{ fontSize: 9, color: MUTED }}>{label}</span>
+          <span style={{ fontSize: 9, color: ACCENT }}>{Math.round(value)}</span>
         </div>
-        <div style={{ fontSize: 9, color: '#3a4a6a', marginTop: 2 }}>
-          {getAgeStr()}
+        <div style={{ height: 3, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', width: `${Math.max(0, Math.min(100, value))}%`,
+            background: color, borderRadius: 2, transition: 'width 0.8s ease',
+          }} />
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* ── Top-left: current activity badge (only when active) ── */}
-      {actIcon && (
-        <div style={{
-          position: 'absolute', top: 12, left: 14,
-          background: 'rgba(5,10,20,0.82)',
-          border: '1px solid rgba(61,90,138,0.5)',
-          borderRadius: 5, padding: '5px 10px',
-          display: 'flex', alignItems: 'center', gap: 7,
-        }}>
-          <span style={{ fontSize: 16 }}>{actIcon}</span>
-          <span style={{ fontSize: 11, color: '#7aaee8' }}>
-            {ACTION_LABELS[character.currentActivity!] ?? character.currentActivity}
-          </span>
+// ─── Left sidebar ─────────────────────────────────────────────────────────────
+
+type Character = NonNullable<ReturnType<typeof useGameStore.getState>['character']>;
+
+function LeftSidebar({ char }: { char: Character }) {
+  const actIcon = char.currentActivity ? ACTION_ICONS[char.currentActivity] : null;
+
+  return (
+    <div style={{
+      width: 252, flexShrink: 0,
+      background: BG,
+      borderRight: `1px solid ${BORDER}`,
+      display: 'flex', flexDirection: 'column',
+      padding: 6, gap: 5,
+      overflow: 'hidden',
+    }}>
+      <Pane>
+        <SectionHead title="Personagem" />
+        <div style={{ padding: '8px 9px' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: TEXT, lineHeight: 1.2 }}>{char.name}</div>
+          <div style={{ fontSize: 9, color: MUTED, marginTop: 2 }}>
+            {char.phase === 'adult' ? 'Adulto' : 'Adolescente'}
+            {char.jobTitle ? ` · ${char.jobTitle}` : ''}
+          </div>
         </div>
+      </Pane>
+
+      <Pane>
+        <SectionHead title="Atributos" />
+        <div style={{ paddingTop: 2, paddingBottom: 4 }}>
+          <StatBar icon="⚡" label="Energia"    value={char.energy}    color="#60b8ff" />
+          <StatBar icon="❤" label="Saúde"      value={char.health}    color="#e05555" />
+          <StatBar icon="😊" label="Felicidade" value={char.happiness} color="#ffc840" />
+          {char.stress > 40 && (
+            <StatBar icon="😰" label="Estresse" value={char.stress}   color="#ff8040" />
+          )}
+        </div>
+      </Pane>
+
+      {actIcon && (
+        <Pane>
+          <SectionHead title="Atividade" />
+          <div style={{ padding: '7px 9px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>{actIcon}</span>
+            <span style={{ fontSize: 11, color: ACCENT }}>
+              {ACTION_LABELS[char.currentActivity!] ?? char.currentActivity}
+            </span>
+          </div>
+        </Pane>
       )}
 
-      {/* ── Bottom strip: stats + quick actions ── */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        pointerEvents: 'auto',
-        background: 'rgba(5,10,20,0.90)',
-        borderTop: '1px solid rgba(42,51,80,0.7)',
-        display: 'flex', alignItems: 'center',
-        padding: '0 14px', height: 54, gap: 0,
-      }}>
-
-        {/* Name + phase */}
-        <div style={{
-          paddingRight: 14,
-          borderRight: '1px solid rgba(42,51,80,0.8)',
-          marginRight: 14,
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#c8d8f0', lineHeight: 1.2 }}>
-            {character.name}
-          </div>
-          <div style={{ fontSize: 9, color: '#3a4a6a', marginTop: 1 }}>
-            {character.phase === 'adult' ? 'Adulto' : 'Adolescente'}
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center', flex: 1 }}>
-          <StatMini icon="⚡" label="Energia"    value={character.energy}    color="#60b8ff" />
-          <StatMini icon="❤"  label="Saúde"      value={character.health}    color="#ff6868" />
-          <StatMini icon="😊" label="Felicidade"  value={character.happiness} color="#ffc840" />
-          {character.stress > 50 && (
-            <StatMini icon="😰" label="Estresse" value={character.stress}    color="#ff8040" />
-          )}
-          <MoneyChip money={character.money} />
-        </div>
-
-        {/* Nearby building quick-action buttons */}
-        {nearby && !character.currentActivity && (
-          <div style={{
-            display: 'flex', gap: 6,
-            paddingLeft: 14,
-            borderLeft: '1px solid rgba(42,51,80,0.8)',
-          }}>
-            {nearby.actions.map(action => (
-              <button
-                key={action}
-                onClick={() => triggerAction({ buildingId: nearby.id, action })}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '5px 12px',
-                  background: 'rgba(30,80,50,0.35)',
-                  border: '1px solid rgba(69,176,117,0.55)',
-                  borderRadius: 4,
-                  color: '#45b075',
-                  fontSize: 11, fontWeight: 700,
-                  fontFamily: 'var(--font-ui)',
-                  transition: 'background 0.1s, border-color 0.1s',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={e => {
-                  const el = e.currentTarget as HTMLElement;
-                  el.style.background = 'rgba(30,80,50,0.6)';
-                  el.style.borderColor = 'rgba(69,176,117,0.9)';
-                }}
-                onMouseLeave={e => {
-                  const el = e.currentTarget as HTMLElement;
-                  el.style.background = 'rgba(30,80,50,0.35)';
-                  el.style.borderColor = 'rgba(69,176,117,0.55)';
-                }}
-              >
-                <span style={{ fontSize: 15 }}>{ACTION_ICONS[action] ?? '?'}</span>
-                {ACTION_LABELS[action] ?? action}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Controls hint — very faint, far right */}
-        <div style={{
-          marginLeft: 14,
-          fontSize: 9, color: 'rgba(80,100,140,0.5)',
-          lineHeight: 1.7, textAlign: 'right',
-        }}>
-          WASD · E · Click
-        </div>
+      <div style={{ marginTop: 'auto', fontSize: 9, color: MUTED, lineHeight: 2, padding: '0 2px' }}>
+        WASD / Setas — mover<br />
+        E — interagir<br />
+        Click — caminhar até
       </div>
     </div>
   );
 }
 
-function StatMini({ icon, label, value, color }: {
-  icon: string; label: string; value: number; color: string;
+// ─── Right sidebar ────────────────────────────────────────────────────────────
+
+function RightSidebar({
+  char, nearby, triggerAction,
+}: {
+  char: Character;
+  nearby: (typeof BUILDINGS)[0] | undefined;
+  triggerAction: (a: { buildingId: string; action: string }) => void;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ fontSize: 12 }}>{icon}</span>
-        <span style={{ fontSize: 9, color: 'rgba(180,200,230,0.5)' }}>{label}</span>
-      </div>
-      <MiniBar value={value} color={color} />
+    <div style={{
+      width: 252, flexShrink: 0,
+      background: BG,
+      borderLeft: `1px solid ${BORDER}`,
+      display: 'flex', flexDirection: 'column',
+      padding: 6, gap: 5,
+      overflow: 'hidden',
+    }}>
+      <Pane>
+        <SectionHead title="Finanças" />
+        <div style={{ padding: '8px 9px' }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: ACCENT, lineHeight: 1 }}>
+            R$&nbsp;{char.money.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+          </div>
+          <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {char.monthlyIncome > 0 && (
+              <Row label="Renda / mês" value={`+R$ ${char.monthlyIncome.toLocaleString('pt-BR')}`} color={SUCCESS} />
+            )}
+            {char.monthlyExpenses > 0 && (
+              <Row label="Despesas / mês" value={`-R$ ${char.monthlyExpenses.toLocaleString('pt-BR')}`} color={DANGER} />
+            )}
+          </div>
+        </div>
+      </Pane>
+
+      {nearby && !char.currentActivity && (
+        <Pane>
+          <SectionHead title={`Ações · ${nearby.label}`} />
+          <div style={{ padding: '6px 9px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {nearby.actions.map(action => (
+              <ActionBtn
+                key={action}
+                icon={ACTION_ICONS[action] ?? '?'}
+                label={ACTION_LABELS[action] ?? action}
+                onClick={() => triggerAction({ buildingId: nearby.id, action })}
+              />
+            ))}
+          </div>
+        </Pane>
+      )}
+
+      <Pane>
+        <SectionHead title="Objetivos" />
+        <div style={{ padding: '7px 9px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <Goal label="Explorar o bairro" done={false} />
+          <Goal label="Ir ao trabalho" done={false} />
+          <Goal label="Estudar na escola" done={false} />
+          <Goal label="Visitar o parque" done={false} />
+        </div>
+      </Pane>
     </div>
   );
 }
 
-function MoneyChip({ money }: { money: number }) {
+function Row({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9 }}>
+      <span style={{ color: MUTED }}>{label}</span>
+      <span style={{ color, fontWeight: 700 }}>{value}</span>
+    </div>
+  );
+}
+
+function ActionBtn({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '7px 10px',
+      background: 'rgba(69,176,117,0.12)',
+      border: `1px solid rgba(69,176,117,0.35)`,
+      borderRadius: 3, color: SUCCESS,
+      fontSize: 11, fontWeight: 700,
+      fontFamily: 'var(--font-ui)',
+      cursor: 'pointer', textAlign: 'left', width: '100%',
+    }}
+    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(69,176,117,0.24)'; }}
+    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(69,176,117,0.12)'; }}
+    >
+      <span style={{ fontSize: 14 }}>{icon}</span>
+      {label}
+    </button>
+  );
+}
+
+function Goal({ label, done }: { label: string; done: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: done ? SUCCESS : MUTED }}>
+      <span>{done ? '✓' : '○'}</span>
+      <span style={{ textDecoration: done ? 'line-through' : 'none' }}>{label}</span>
+    </div>
+  );
+}
+
+// ─── Top bar ─────────────────────────────────────────────────────────────────
+
+function TopBar({ timeStr, ageStr }: { timeStr: string; ageStr: string }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 5,
-      padding: '3px 9px',
-      background: 'rgba(42,51,80,0.4)',
-      border: '1px solid rgba(61,90,138,0.4)',
-      borderRadius: 4,
+      height: 42, flexShrink: 0,
+      background: PANEL,
+      borderBottom: `1px solid ${BORDER}`,
+      display: 'flex', alignItems: 'center',
+      padding: '0 14px',
     }}>
-      <span style={{ fontSize: 12 }}>💰</span>
-      <span style={{ fontSize: 12, fontWeight: 700, color: '#7aaee8' }}>
-        R$&nbsp;{money.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+      <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 14, color: ACCENT }}>
+        Tutorial da Vida
       </span>
+      <div style={{ flex: 1 }} />
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 20, color: ACCENT, lineHeight: 1 }}>
+          {timeStr}
+        </div>
+        <div style={{ fontSize: 9, color: MUTED, marginTop: 1 }}>{ageStr}</div>
+      </div>
     </div>
   );
 }
@@ -222,52 +273,39 @@ function OfflineReport({ result, onClose }: { result: OfflineProgressResult; onC
       zIndex: 500,
     }}>
       <div style={{
-        width: 340,
-        background: '#0d1117',
-        border: '1px solid #2a3350',
-        borderRadius: 6,
-        overflow: 'hidden',
+        width: 340, background: PANEL,
+        border: `1px solid ${BORDER}`, borderRadius: 6, overflow: 'hidden',
       }}>
         <div style={{
-          background: '#0a0e18',
-          borderBottom: '1px solid #2a3350',
+          background: HEADER, borderBottom: `1px solid ${BORDER}`,
           padding: '10px 16px',
-          fontFamily: 'var(--font-pixel)', fontSize: 15,
-          color: '#7aaee8',
+          fontFamily: 'var(--font-pixel)', fontSize: 15, color: ACCENT,
         }}>
           Você ficou fora por {timeLabel}
         </div>
         <div style={{ padding: '14px 16px' }}>
-          <div style={{ color: '#4a5a7a', fontSize: 11, marginBottom: 10 }}>
-            Enquanto isso, a vida continuou:
-          </div>
+          <div style={{ color: MUTED, fontSize: 11, marginBottom: 10 }}>Enquanto isso, a vida continuou:</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 16 }}>
             {result.moneyEarned > 0 && (
-              <OfflineRow label="Renda recebida" value={`+R$ ${result.moneyEarned.toFixed(2)}`} color="#45b075" />
+              <OffRow label="Renda recebida" value={`+R$ ${result.moneyEarned.toFixed(2)}`} color={SUCCESS} />
             )}
             {result.moneySpent > 0 && (
-              <OfflineRow label="Despesas" value={`-R$ ${result.moneySpent.toFixed(2)}`} color="#ff6050" />
+              <OffRow label="Despesas" value={`-R$ ${result.moneySpent.toFixed(2)}`} color={DANGER} />
             )}
             {result.events.map((ev, i) => (
-              <div key={i} style={{
-                fontSize: 11, color: '#4a5a7a',
-                borderTop: '1px solid #1a2030', paddingTop: 5,
-              }}>
+              <div key={i} style={{ fontSize: 11, color: MUTED, borderTop: `1px solid ${BORDER}`, paddingTop: 5 }}>
                 {ev.description}
               </div>
             ))}
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              width: '100%', padding: '9px',
-              background: '#1a3a22',
-              border: '1px solid #45b075',
-              borderRadius: 4, color: '#45b075',
-              fontFamily: 'var(--font-ui)', fontWeight: 700, fontSize: 13,
-              cursor: 'pointer',
-            }}
-          >
+          <button onClick={onClose} style={{
+            width: '100%', padding: '9px',
+            background: 'rgba(69,176,117,0.15)',
+            border: `1px solid ${SUCCESS}`,
+            borderRadius: 4, color: SUCCESS,
+            fontFamily: 'var(--font-ui)', fontWeight: 700, fontSize: 13,
+            cursor: 'pointer',
+          }}>
             Continuar
           </button>
         </div>
@@ -276,51 +314,39 @@ function OfflineReport({ result, onClose }: { result: OfflineProgressResult; onC
   );
 }
 
-function OfflineRow({ label, value, color }: { label: string; value: string; color: string }) {
+function OffRow({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between',
-      padding: '4px 8px',
-      background: '#0a0e18',
-      border: '1px solid #1a2030',
-      borderRadius: 3, fontSize: 11,
+      padding: '4px 8px', background: HEADER,
+      border: `1px solid ${BORDER}`, borderRadius: 3, fontSize: 11,
     }}>
-      <span style={{ color: '#4a5a7a' }}>{label}</span>
+      <span style={{ color: MUTED }}>{label}</span>
       <span style={{ color, fontWeight: 700 }}>{value}</span>
     </div>
   );
 }
 
-// ─── Loading ──────────────────────────────────────────────────────────────────
+// ─── Loading / Error ──────────────────────────────────────────────────────────
 
 function GameLoading() {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      height: '100vh', background: '#0a0e18',
+      height: '100vh', background: BG,
       flexDirection: 'column', gap: 16,
     }}>
-      <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 26, color: '#7aaee8' }}>
-        Tutorial da Vida
-      </div>
-      <div style={{ color: '#3a4a6a', fontSize: 12 }}>Carregando o mundo...</div>
-      <div style={{
-        width: 160, height: 4,
-        background: '#0d1117',
-        border: '1px solid #2a3350',
-        borderRadius: 2, overflow: 'hidden',
-      }}>
-        <div style={{
-          height: '100%', background: '#4a7fc1', borderRadius: 2,
-          animation: 'loadBar 1.5s ease-in-out infinite',
-        }} />
+      <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 26, color: ACCENT }}>Tutorial da Vida</div>
+      <div style={{ color: MUTED, fontSize: 12 }}>Carregando o mundo...</div>
+      <div style={{ width: 160, height: 4, background: HEADER, border: `1px solid ${BORDER}`, borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ height: '100%', background: ACCENT, borderRadius: 2, animation: 'loadBar 1.5s ease-in-out infinite' }} />
       </div>
       <style>{`@keyframes loadBar{0%{width:0%}50%{width:70%}100%{width:100%}}`}</style>
     </div>
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Preview character ────────────────────────────────────────────────────────
 
 const PREVIEW_CHARACTER = {
   id: 1, name: 'João Silva', phase: 'adult' as const, gameAge: 9504000,
@@ -329,6 +355,8 @@ const PREVIEW_CHARACTER = {
   currentActivity: null, activityEndsAt: null, locationId: 'player_home', jobTitle: 'Analista',
 };
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function GamePage() {
   const router         = useRouter();
   const setCharacter   = useGameStore(s => s.setCharacter);
@@ -336,6 +364,10 @@ export default function GamePage() {
   const setLoaded      = useGameStore(s => s.setLoaded);
   const isLoaded       = useGameStore(s => s.isLoaded);
   const character      = useGameStore(s => s.character);
+  const getTimeStr     = useGameStore(s => s.getTimeString);
+  const getAgeStr      = useGameStore(s => s.getAgeString);
+  const nearbyId       = useGameStore(s => s.nearbyBuildingId);
+  const triggerAction  = useGameStore(s => s.triggerAction);
 
   const [offline, setOffline] = useState<OfflineProgressResult | null>(null);
   const [error,   setError]   = useState('');
@@ -356,12 +388,10 @@ export default function GamePage() {
   async function loadGame() {
     try {
       const state = await characterApi.getState();
-
       if (state.phase === 'adult') {
         const offlineResult = await simulation.offlineProgress();
         if (offlineResult.timeElapsedMinutes > 60) setOffline(offlineResult);
       }
-
       setCharacter({
         id: state.id, name: state.name, phase: state.phase, gameAge: state.gameAge,
         energy: state.energy, happiness: state.happiness, stress: state.stress,
@@ -383,45 +413,46 @@ export default function GamePage() {
     return (
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: '100vh', background: '#0a0e18',
-        color: '#ff6b6b', fontFamily: 'monospace',
-        fontSize: 13, flexDirection: 'column', gap: 12,
+        height: '100vh', background: BG, color: DANGER,
+        fontFamily: 'monospace', fontSize: 13, flexDirection: 'column', gap: 12,
       }}>
         <div>Erro ao carregar o jogo</div>
-        <div style={{ color: '#3a4a6a', fontSize: 11 }}>{error}</div>
+        <div style={{ color: MUTED, fontSize: 11 }}>{error}</div>
         <button onClick={() => router.replace('/login')} style={{
           marginTop: 8, padding: '7px 18px',
-          background: 'transparent',
-          border: '1px solid #2a3350', borderRadius: 4,
-          color: '#3a4a6a', fontFamily: 'monospace', fontSize: 11,
-          cursor: 'pointer',
-        }}>
-          Voltar ao login
-        </button>
+          background: 'transparent', border: `1px solid ${BORDER}`,
+          borderRadius: 4, color: MUTED, fontFamily: 'monospace', fontSize: 11, cursor: 'pointer',
+        }}>Voltar ao login</button>
       </div>
     );
   }
 
   if (!isLoaded) return <GameLoading />;
+  if (character && character.phase !== 'adult') return <LifeNarrative />;
 
-  if (character && character.phase !== 'adult') {
-    return <LifeNarrative />;
-  }
+  const nearby = nearbyId ? BUILDINGS.find(b => b.id === nearbyId) : undefined;
 
   return (
     <div style={{
       width: '100vw', height: '100vh',
-      position: 'relative',
-      background: '#1a2a0a',
-      overflow: 'hidden',
+      display: 'flex', flexDirection: 'column',
+      background: BG, overflow: 'hidden',
+      fontFamily: 'var(--font-ui)',
     }}>
-      {/* Full-screen canvas — world is the protagonist */}
-      <GameCanvas />
+      <TopBar timeStr={getTimeStr()} ageStr={getAgeStr()} />
 
-      {/* Floating HUD overlay — secondary to the world */}
-      <FloatingHUD />
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+        {character && <LeftSidebar char={character} />}
 
-      {offline && <OfflineReport result={offline} onClose={() => setOffline(null)} />}
+        {/* ── CENTER: game canvas ── */}
+        <div style={{ flex: 1, position: 'relative', minWidth: 0, overflow: 'hidden' }}>
+          <GameCanvas />
+        </div>
+
+        {character && (
+          <RightSidebar char={character} nearby={nearby} triggerAction={triggerAction} />
+        )}
+      </div>
     </div>
   );
 }

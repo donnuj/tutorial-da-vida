@@ -40,7 +40,7 @@ export default function GameCanvas() {
   return (
     <div
       ref={containerRef}
-      style={{ position: 'absolute', inset: 0, background: '#1e3010' }}
+      style={{ width: '100%', height: '100%', position: 'relative', background: '#0a0f1a' }}
     />
   );
 }
