@@ -6,7 +6,7 @@ import { TILE_SIZE, type NpcDef } from '../world/NeighborhoodMap';
 // Row 1 (frames 24-47): facing LEFT  — walk frames: cols 0-3
 // Row 2 (frames 48-71): facing RIGHT — walk frames: cols 0-3
 // Row 3 (frames 72-95): facing UP    — walk frames: cols 0-3
-const NPC_SCALE = 0.9;
+const NPC_SCALE = 1.3;
 
 // Map each NPC id to a specific Puny Character variant
 const NPC_SPRITE: Record<string, string> = {
@@ -49,15 +49,17 @@ export class NPC {
     const wx = this.tileX * TILE_SIZE + TILE_SIZE / 2;
     const wy = this.tileY * TILE_SIZE + TILE_SIZE / 2;
 
+    const shadow = scene.add.ellipse(0, 12, 18, 6, 0x000000, 0.22);
+
     this.body = scene.add.sprite(0, -4, this.spriteKey, 0);
     this.body.setScale(NPC_SCALE);
 
-    this.nameLabel = scene.add.text(0, -26, def.name, {
+    this.nameLabel = scene.add.text(0, -32, def.name, {
       fontSize: '8px', fontFamily: 'monospace',
       color: '#e8d5b0', stroke: '#000000', strokeThickness: 3, align: 'center',
     }).setOrigin(0.5, 1);
 
-    this.sprite = scene.add.container(wx, wy, [this.body, this.nameLabel]);
+    this.sprite = scene.add.container(wx, wy, [shadow, this.body, this.nameLabel]);
     this.sprite.setDepth(40);
 
     this.ensureAnimations(scene, this.spriteKey);

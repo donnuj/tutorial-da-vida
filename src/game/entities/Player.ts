@@ -23,11 +23,12 @@ const ANIM: Record<string, number[]> = {
   up:    [72, 73, 74, 75],
 };
 const IDLE_FRAME   = 0;
-const PLAYER_SCALE = 0.9;
+const PLAYER_SCALE = 1.5;
 
 export class Player {
   readonly sprite: Phaser.GameObjects.Container;
 
+  private shadow: Phaser.GameObjects.Ellipse;
   private body: Phaser.GameObjects.Sprite;
   private nameLabel: Phaser.GameObjects.Text;
   private activityIcon: Phaser.GameObjects.Text;
@@ -53,17 +54,19 @@ export class Player {
     const wx = tileX * TILE_SIZE + TILE_SIZE / 2;
     const wy = tileY * TILE_SIZE + TILE_SIZE / 2;
 
+    this.shadow = scene.add.ellipse(0, 14, 22, 8, 0x000000, 0.28);
+
     this.body = scene.add.sprite(0, -4, 'char_base', IDLE_FRAME);
     this.body.setScale(PLAYER_SCALE);
 
-    this.nameLabel = scene.add.text(0, -26, name, {
+    this.nameLabel = scene.add.text(0, -38, name, {
       fontSize: '8px', fontFamily: 'monospace',
       color: '#FFD700', stroke: '#000000', strokeThickness: 3, align: 'center',
     }).setOrigin(0.5, 1);
 
-    this.activityIcon = scene.add.text(20, -4, '', { fontSize: '12px' }).setOrigin(0.5);
+    this.activityIcon = scene.add.text(24, 18, '', { fontSize: '12px' }).setOrigin(0.5);
 
-    this.sprite = scene.add.container(wx, wy, [this.body, this.nameLabel, this.activityIcon]);
+    this.sprite = scene.add.container(wx, wy, [this.shadow, this.body, this.nameLabel, this.activityIcon]);
     this.sprite.setDepth(50);
 
     this.registerAnimations();
